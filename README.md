@@ -256,7 +256,7 @@ OCR エンジンのモデルデータである、[tesseract-ocr / tessdata_best]
 うまく起動すると、
 
 ```
-SuoerBookTools>
+SuperBookTools>
 ```
 
 というコマンドプロンプトのようなものが表示されます。
@@ -273,7 +273,7 @@ ConvertPdf
 ![](doc_img/07.png)
 
 
-なお、ConvertPdf コマンドには、引数を指定することができます。さらに、本プログラムのコマンドラインから ConvertPdf コマンドに引数を指定することも可能です。バッチファイル等から自動的に本プログラムを呼び出す際に便利です。詳しくは、「SuoerBookTools>」プロンプト内で、
+なお、ConvertPdf コマンドには、引数を指定することができます。さらに、本プログラムのコマンドラインから ConvertPdf コマンドに引数を指定することも可能です。バッチファイル等から自動的に本プログラムを呼び出す際に便利です。詳しくは、「SuperBookTools>」プロンプト内で、
 ```
 ConvertPdf --help
 ```
