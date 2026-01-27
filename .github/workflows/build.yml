@@ -1,6 +1,6 @@
 # GitHub Actions - Windows 11 ビルドワークフロー
 # DN_SuperBook_PDF_Converter プロジェクト用
-# セルフホストランナー対応版
+# ハイブリッド構成: GitHubランナー（ビルド）+ セルフホストランナー（デプロイ）
 
 name: Build, Test and Deploy
 
@@ -12,22 +12,35 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'build'
+        type: choice
+        options:
+          - build
+          - rollback
 
 env:
   # デプロイ先フォルダ（セルフホストランナー上のパス）
   DEPLOY_PATH: 'C:\Program Files\SuperBookTools'
   # バックアップフォルダ
   BACKUP_PATH: 'C:\Program Files\SuperBookTools_Backup'
+  # .NET バージョン
+  DOTNET_VERSION: '6.0'
 
 jobs:
+  # ビルド・テストジョブ（GitHub提供ランナー）
   build:
-    runs-on: self-hosted
+    runs-on: windows-latest
+    if: github.event.inputs.action != 'rollback'
     timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        dotnet-version: ["6.0"]
         configuration: [Debug, Release]
 
     steps:
@@ -36,10 +49,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup .NET SDK ${{ matrix.dotnet-version }}
+      - name: Setup .NET SDK ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Display .NET version
         run: dotnet --version
@@ -54,40 +67,44 @@ jobs:
         run: dotnet test -c ${{ matrix.configuration }} -v normal --logger:"console;verbosity=detailed" DN_SuperBook_PDF_Converter_VS2026.sln --no-build
         continue-on-error: true
 
-      - name: Publish artifacts
+      # Releaseビルドのみ: 自己完結型パッケージを作成
+      - name: Publish self-contained application
         if: matrix.configuration == 'Release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SuperBookToolsApp-${{ matrix.dotnet-version }}-${{ matrix.configuration }}
-          path: |
-            SuperBookToolsApp/bin/${{ matrix.configuration }}/net6.0/
-          retention-days: 30
-
-  # デプロイジョブ（セルフホストランナー専用）
-  deploy:
-    runs-on: self-hosted
-    needs: build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup .NET SDK 6.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "6.0"
-
-      - name: Publish application
         run: |
           dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
             -o ./publish/win-x64
+
+      # Releaseビルドのみ: アーティファクトをアップロード
+      - name: Upload build artifacts
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperBookToolsApp-win-x64
+          path: ./publish/win-x64/
+          retention-days: 30
+
+  # デプロイジョブ（セルフホストランナー）
+  deploy:
+    runs-on: self-hosted
+    needs: build
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event.inputs.action != 'rollback'
+    timeout-minutes: 15
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: SuperBookToolsApp-win-x64
+          path: ./artifacts
+
+      - name: Display downloaded files
+        shell: pwsh
+        run: |
+          Write-Host "Downloaded artifacts:"
+          Get-ChildItem -Recurse ./artifacts | Format-Table FullName, Length
 
       - name: Stop running application (if exists)
         shell: pwsh
@@ -127,7 +144,7 @@ jobs:
         shell: pwsh
         run: |
           $deployPath = "${{ env.DEPLOY_PATH }}"
-          $sourcePath = "./publish/win-x64"
+          $sourcePath = "./artifacts"
           
           Write-Host "Deploying to $deployPath..."
           
@@ -180,20 +197,24 @@ jobs:
             exit 1
           }
 
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SuperBookToolsApp-deployed-${{ github.sha }}
-          path: '${{ env.DEPLOY_PATH }}/'
-          retention-days: 7
-
-  # ロールバックジョブ（手動実行用）
+  # ロールバックジョブ（手動実行用 - セルフホストランナー）
   rollback:
     runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event.inputs.action == 'rollback'
     timeout-minutes: 10
 
     steps:
+      - name: Stop running application (if exists)
+        shell: pwsh
+        run: |
+          $processName = "SuperBookToolsApp"
+          $process = Get-Process -Name $processName -ErrorAction SilentlyContinue
+          if ($process) {
+            Write-Host "Stopping $processName..."
+            Stop-Process -Name $processName -Force
+            Start-Sleep -Seconds 2
+          }
+
       - name: Rollback to previous version
         shell: pwsh
         run: |
@@ -212,8 +233,8 @@ jobs:
             Copy-Item -Recurse -Force $backupPath $deployPath
             
             Write-Host "✅ Rollback completed successfully!"
+            Get-ChildItem $deployPath | Format-Table Name, Length, LastWriteTime
           } else {
             Write-Error "❌ No backup found at $backupPath. Cannot rollback."
             exit 1
           }
-
