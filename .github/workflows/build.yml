@@ -1,7 +1,8 @@
 # GitHub Actions - Windows 11 ビルドワークフロー
 # DN_SuperBook_PDF_Converter プロジェクト用
+# セルフホストランナー対応版
 
-name: Build and Test
+name: Build, Test and Deploy
 
 on:
   push:
@@ -12,9 +13,15 @@ on:
       - main
       - master
 
+env:
+  # デプロイ先フォルダ（セルフホストランナー上のパス）
+  DEPLOY_PATH: 'C:\Program Files\SuperBookTools'
+  # バックアップフォルダ
+  BACKUP_PATH: 'C:\Program Files\SuperBookTools_Backup'
+
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: self-hosted
     timeout-minutes: 30
 
     strategy:
@@ -56,11 +63,12 @@ jobs:
             SuperBookToolsApp/bin/${{ matrix.configuration }}/net6.0/
           retention-days: 30
 
-  # Windows 自己完結型ビルド (オプション)
-  publish-self-contained:
-    runs-on: windows-latest
+  # デプロイジョブ（セルフホストランナー専用）
+  deploy:
+    runs-on: self-hosted
     needs: build
-    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -73,7 +81,7 @@ jobs:
         with:
           dotnet-version: "6.0"
 
-      - name: Publish self-contained (win-x64)
+      - name: Publish application
         run: |
           dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
             -c Release `
@@ -81,9 +89,131 @@ jobs:
             --self-contained true `
             -o ./publish/win-x64
 
-      - name: Upload self-contained artifact
+      - name: Stop running application (if exists)
+        shell: pwsh
+        run: |
+          $processName = "SuperBookToolsApp"
+          $process = Get-Process -Name $processName -ErrorAction SilentlyContinue
+          if ($process) {
+            Write-Host "Stopping $processName..."
+            Stop-Process -Name $processName -Force
+            Start-Sleep -Seconds 2
+          } else {
+            Write-Host "$processName is not running."
+          }
+
+      - name: Backup existing deployment
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          $backupPath = "${{ env.BACKUP_PATH }}"
+          
+          if (Test-Path $deployPath) {
+            Write-Host "Backing up existing deployment..."
+            
+            # 既存のバックアップを削除
+            if (Test-Path $backupPath) {
+              Remove-Item -Recurse -Force $backupPath
+            }
+            
+            # 現在のデプロイをバックアップ
+            Copy-Item -Recurse -Force $deployPath $backupPath
+            Write-Host "Backup completed to $backupPath"
+          } else {
+            Write-Host "No existing deployment found. Skipping backup."
+          }
+
+      - name: Deploy to local folder
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          $sourcePath = "./publish/win-x64"
+          
+          Write-Host "Deploying to $deployPath..."
+          
+          # デプロイ先フォルダを作成（存在しない場合）
+          if (-not (Test-Path $deployPath)) {
+            New-Item -ItemType Directory -Path $deployPath -Force | Out-Null
+          }
+          
+          # ファイルをコピー
+          Copy-Item -Recurse -Force "$sourcePath\*" $deployPath
+          
+          Write-Host "Deployment completed successfully!"
+          Write-Host "Files deployed:"
+          Get-ChildItem $deployPath | Format-Table Name, Length, LastWriteTime
+
+      - name: Create desktop shortcut
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          $exePath = Join-Path $deployPath "SuperBookToolsApp.exe"
+          $desktopPath = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          $shortcutPath = Join-Path $desktopPath "SuperBookToolsApp.lnk"
+          
+          if (Test-Path $exePath) {
+            $shell = New-Object -ComObject WScript.Shell
+            $shortcut = $shell.CreateShortcut($shortcutPath)
+            $shortcut.TargetPath = $exePath
+            $shortcut.WorkingDirectory = $deployPath
+            $shortcut.Description = "SuperBook PDF Converter Tools"
+            $shortcut.Save()
+            Write-Host "Desktop shortcut created at $shortcutPath"
+          } else {
+            Write-Host "Warning: Executable not found at $exePath"
+          }
+
+      - name: Verify deployment
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          $exePath = Join-Path $deployPath "SuperBookToolsApp.exe"
+          
+          if (Test-Path $exePath) {
+            Write-Host "✅ Deployment verified successfully!"
+            $fileInfo = Get-Item $exePath
+            Write-Host "  Executable: $exePath"
+            Write-Host "  Size: $($fileInfo.Length) bytes"
+            Write-Host "  Modified: $($fileInfo.LastWriteTime)"
+          } else {
+            Write-Error "❌ Deployment verification failed! Executable not found."
+            exit 1
+          }
+
+      - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuperBookToolsApp-win-x64-self-contained
-          path: ./publish/win-x64/
-          retention-days: 30
+          name: SuperBookToolsApp-deployed-${{ github.sha }}
+          path: '${{ env.DEPLOY_PATH }}/'
+          retention-days: 7
+
+  # ロールバックジョブ（手動実行用）
+  rollback:
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+
+    steps:
+      - name: Rollback to previous version
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          $backupPath = "${{ env.BACKUP_PATH }}"
+          
+          if (Test-Path $backupPath) {
+            Write-Host "Rolling back to previous version..."
+            
+            # 現在のデプロイを削除
+            if (Test-Path $deployPath) {
+              Remove-Item -Recurse -Force $deployPath
+            }
+            
+            # バックアップから復元
+            Copy-Item -Recurse -Force $backupPath $deployPath
+            
+            Write-Host "✅ Rollback completed successfully!"
+          } else {
+            Write-Error "❌ No backup found at $backupPath. Cannot rollback."
+            exit 1
+          }
+
