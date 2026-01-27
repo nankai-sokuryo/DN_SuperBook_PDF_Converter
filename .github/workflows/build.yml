@@ -25,9 +25,9 @@ on:
 
 env:
   # デプロイ先フォルダ（セルフホストランナー上のパス）
-  DEPLOY_PATH: 'C:\Program Files\SuperBookTools'
+  DEPLOY_PATH: 'C:\SuperBookTools'
   # バックアップフォルダ
-  BACKUP_PATH: 'C:\Program Files\SuperBookTools_Backup'
+  BACKUP_PATH: 'C:\SuperBookTools_Backup'
   # .NET バージョン
   DOTNET_VERSION: '6.0'
 
