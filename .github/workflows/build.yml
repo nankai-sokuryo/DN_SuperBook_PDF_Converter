@@ -160,24 +160,20 @@ jobs:
           Write-Host "Files deployed:"
           Get-ChildItem $deployPath | Format-Table Name, Length, LastWriteTime
 
-      - name: Create desktop shortcut
+      - name: Add to system PATH
         shell: pwsh
         run: |
           $deployPath = "${{ env.DEPLOY_PATH }}"
-          $exePath = Join-Path $deployPath "SuperBookToolsApp.exe"
-          $desktopPath = [Environment]::GetFolderPath("CommonDesktopDirectory")
-          $shortcutPath = Join-Path $desktopPath "SuperBookToolsApp.lnk"
+          $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
           
-          if (Test-Path $exePath) {
-            $shell = New-Object -ComObject WScript.Shell
-            $shortcut = $shell.CreateShortcut($shortcutPath)
-            $shortcut.TargetPath = $exePath
-            $shortcut.WorkingDirectory = $deployPath
-            $shortcut.Description = "SuperBook PDF Converter Tools"
-            $shortcut.Save()
-            Write-Host "Desktop shortcut created at $shortcutPath"
+          if ($currentPath -notlike "*$deployPath*") {
+            Write-Host "Adding $deployPath to system PATH..."
+            $newPath = "$currentPath;$deployPath"
+            [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+            Write-Host "✅ Added to system PATH successfully!"
+            Write-Host "ℹ️ New terminal sessions will have access to SuperBookToolsApp command."
           } else {
-            Write-Host "Warning: Executable not found at $exePath"
+            Write-Host "ℹ️ $deployPath is already in system PATH."
           }
 
       - name: Verify deployment
