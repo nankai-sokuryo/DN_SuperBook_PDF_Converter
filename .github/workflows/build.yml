@@ -1,0 +1,89 @@
+# GitHub Actions - Windows 11 ビルドワークフロー
+# DN_SuperBook_PDF_Converter プロジェクト用
+
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ["6.0"]
+        configuration: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET SDK ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Display .NET version
+        run: dotnet --version
+
+      - name: Restore dependencies
+        run: dotnet restore DN_SuperBook_PDF_Converter_VS2026.sln
+
+      - name: Build ${{ matrix.configuration }}
+        run: dotnet build -c ${{ matrix.configuration }} -v normal DN_SuperBook_PDF_Converter_VS2026.sln --no-restore
+
+      - name: Test ${{ matrix.configuration }}
+        run: dotnet test -c ${{ matrix.configuration }} -v normal --logger:"console;verbosity=detailed" DN_SuperBook_PDF_Converter_VS2026.sln --no-build
+        continue-on-error: true
+
+      - name: Publish artifacts
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperBookToolsApp-${{ matrix.dotnet-version }}-${{ matrix.configuration }}
+          path: |
+            SuperBookToolsApp/bin/${{ matrix.configuration }}/net6.0/
+          retention-days: 30
+
+  # Windows 自己完結型ビルド (オプション)
+  publish-self-contained:
+    runs-on: windows-latest
+    needs: build
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET SDK 6.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0"
+
+      - name: Publish self-contained (win-x64)
+        run: |
+          dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o ./publish/win-x64
+
+      - name: Upload self-contained artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperBookToolsApp-win-x64-self-contained
+          path: ./publish/win-x64/
+          retention-days: 30
