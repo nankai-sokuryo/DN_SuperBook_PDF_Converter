@@ -217,28 +217,20 @@ jobs:
               $response = Invoke-WebRequest -Uri $binariesUrl -UseBasicParsing
               $content = $response.Content
               
-              # portable-Q16-HDRI-x64 の .zip ファイルを優先検索（標準コマンドで展開可能）
-              $patternZip = 'ImageMagick-[\d\.]+-portable-Q16-HDRI-x64\.zip'
-              $matchesZip = [regex]::Matches($content, $patternZip)
+              # ImageMagick-7.1.x-portable-Q16-HDRI-x64.7z を検索
+              $pattern = 'ImageMagick-7\.1\.[\d\-]+-portable-Q16-HDRI-x64\.7z'
+              $matches7z = [regex]::Matches($content, $pattern)
               
-              if ($matchesZip.Count -gt 0) {
-                $fileName = $matchesZip[$matchesZip.Count - 1].Value
-                Write-Host "Found ZIP version: $fileName"
+              if ($matches7z.Count -gt 0) {
+                $fileName = $matches7z[$matches7z.Count - 1].Value
+                Write-Host "Found: $fileName"
               } else {
-                # .zipがない場合は.7zを探す
-                $pattern7z = 'ImageMagick-[\d\.]+-portable-Q16-HDRI-x64\.7z'
-                $matches7z = [regex]::Matches($content, $pattern7z)
-                if ($matches7z.Count -gt 0) {
-                  $fileName = $matches7z[$matches7z.Count - 1].Value
-                  Write-Host "Found 7z version: $fileName"
-                } else {
-                  throw "Could not find ImageMagick portable version"
-                }
+                throw "Could not find ImageMagick 7.1.x portable version"
               }
               $downloadUrl = "$binariesUrl$fileName"
             } catch {
               Write-Host "⚠️ Could not detect latest version, using fallback..."
-              $fileName = "ImageMagick-7.1.2-13-portable-Q16-HDRI-x64.zip"
+              $fileName = "ImageMagick-7.1.2-13-portable-Q16-HDRI-x64.7z"
               $downloadUrl = "$binariesUrl$fileName"
             }
             
@@ -246,7 +238,7 @@ jobs:
             Write-Host "Downloading from: $downloadUrl"
             Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath
             
-            # bsdtar (libarchive) で展開（Windows 10 1903以降、.zip/.7z両対応）
+            # bsdtar (libarchive) で展開（Windows 10 1903以降、.7z対応）
             tar -xf $downloadPath -C $toolsPath
             
             Remove-Item $downloadPath -ErrorAction SilentlyContinue
