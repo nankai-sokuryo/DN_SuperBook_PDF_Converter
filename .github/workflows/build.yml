@@ -210,11 +210,46 @@ jobs:
           
           if (-not (Test-Path $exePath)) {
             Write-Host "Downloading ImageMagick..."
-            $zipPath = Join-Path $env:TEMP "imagemagick.7z"
-            # ImageMagick portable版をダウンロード
-            Invoke-WebRequest -Uri "https://imagemagick.org/archive/binaries/ImageMagick-7.1.1-47-portable-Q16-HDRI-x64.zip" -OutFile $zipPath
-            Expand-Archive -Path $zipPath -DestinationPath $toolsPath -Force
-            Remove-Item $zipPath
+            
+            # ImageMagickのバイナリ一覧ページから最新のportable版を検索
+            $binariesUrl = "https://imagemagick.org/archive/binaries/"
+            try {
+              $response = Invoke-WebRequest -Uri $binariesUrl -UseBasicParsing
+              $content = $response.Content
+              
+              # portable-Q16-HDRI-x64 の .zip ファイルを優先検索（標準コマンドで展開可能）
+              $patternZip = 'ImageMagick-[\d\.]+-portable-Q16-HDRI-x64\.zip'
+              $matchesZip = [regex]::Matches($content, $patternZip)
+              
+              if ($matchesZip.Count -gt 0) {
+                $fileName = $matchesZip[$matchesZip.Count - 1].Value
+                Write-Host "Found ZIP version: $fileName"
+              } else {
+                # .zipがない場合は.7zを探す
+                $pattern7z = 'ImageMagick-[\d\.]+-portable-Q16-HDRI-x64\.7z'
+                $matches7z = [regex]::Matches($content, $pattern7z)
+                if ($matches7z.Count -gt 0) {
+                  $fileName = $matches7z[$matches7z.Count - 1].Value
+                  Write-Host "Found 7z version: $fileName"
+                } else {
+                  throw "Could not find ImageMagick portable version"
+                }
+              }
+              $downloadUrl = "$binariesUrl$fileName"
+            } catch {
+              Write-Host "⚠️ Could not detect latest version, using fallback..."
+              $fileName = "ImageMagick-7.1.2-13-portable-Q16-HDRI-x64.zip"
+              $downloadUrl = "$binariesUrl$fileName"
+            }
+            
+            $downloadPath = Join-Path $env:TEMP $fileName
+            Write-Host "Downloading from: $downloadUrl"
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath
+            
+            # bsdtar (libarchive) で展開（Windows 10 1903以降、.zip/.7z両対応）
+            tar -xf $downloadPath -C $toolsPath
+            
+            Remove-Item $downloadPath -ErrorAction SilentlyContinue
             Write-Host "✅ ImageMagick installed"
           } else {
             Write-Host "ℹ️ ImageMagick already exists"
