@@ -160,20 +160,289 @@ jobs:
           Write-Host "Files deployed:"
           Get-ChildItem $deployPath | Format-Table Name, Length, LastWriteTime
 
-      - name: Add to system PATH
+      - name: Setup external tools directory
         shell: pwsh
         run: |
           $deployPath = "${{ env.DEPLOY_PATH }}"
-          $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          $toolsPath = Join-Path $deployPath "external_tools\external_tools\image_tools"
           
-          if ($currentPath -notlike "*$deployPath*") {
-            Write-Host "Adding $deployPath to system PATH..."
-            $newPath = "$currentPath;$deployPath"
-            [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
-            Write-Host "✅ Added to system PATH successfully!"
-            Write-Host "ℹ️ New terminal sessions will have access to SuperBookToolsApp command."
+          # ディレクトリ構造を作成
+          $subDirs = @(
+            "exiftool-13.30_64",
+            "ImageMagick-portable-Q16-HDRI-x64",
+            "pdfcpu",
+            "QPDF",
+            "RealEsrgan\RealEsrgan_Repo",
+            "yomitoku",
+            "TesseractOCR_Data"
+          )
+          
+          foreach ($dir in $subDirs) {
+            $fullPath = Join-Path $toolsPath $dir
+            if (-not (Test-Path $fullPath)) {
+              New-Item -ItemType Directory -Path $fullPath -Force | Out-Null
+              Write-Host "Created: $fullPath"
+            }
+          }
+
+      - name: Download and setup ExifTool
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\exiftool-13.30_64"
+          $exePath = Join-Path $toolsPath "exiftool.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Host "Downloading ExifTool..."
+            $zipPath = Join-Path $env:TEMP "exiftool.zip"
+            Invoke-WebRequest -Uri "https://filecenter.softether-upload.com/d/260118_003_73929/exiftool-13.30_64.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $toolsPath -Force
+            Remove-Item $zipPath
+            Write-Host "✅ ExifTool installed"
           } else {
-            Write-Host "ℹ️ $deployPath is already in system PATH."
+            Write-Host "ℹ️ ExifTool already exists"
+          }
+
+      - name: Download and setup ImageMagick
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
+          $exePath = Join-Path $toolsPath "magick.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Host "Downloading ImageMagick..."
+            $zipPath = Join-Path $env:TEMP "imagemagick.7z"
+            # ImageMagick portable版をダウンロード
+            Invoke-WebRequest -Uri "https://imagemagick.org/archive/binaries/ImageMagick-7.1.1-47-portable-Q16-HDRI-x64.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $toolsPath -Force
+            Remove-Item $zipPath
+            Write-Host "✅ ImageMagick installed"
+          } else {
+            Write-Host "ℹ️ ImageMagick already exists"
+          }
+
+      - name: Download and setup Ghostscript
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
+          $dllPath = Join-Path $toolsPath "gsdll64.dll"
+          
+          if (-not (Test-Path $dllPath)) {
+            Write-Host "Checking Ghostscript installation..."
+            $gsPath = "C:\Program Files\gs\gs10.05.1\bin"
+            
+            if (Test-Path $gsPath) {
+              Write-Host "Copying Ghostscript files from $gsPath..."
+              Copy-Item "$gsPath\gsdll64.dll" $toolsPath -Force
+              Copy-Item "$gsPath\gsdll64.lib" $toolsPath -Force -ErrorAction SilentlyContinue
+              Copy-Item "$gsPath\gswin64.exe" $toolsPath -Force
+              Copy-Item "$gsPath\gswin64c.exe" $toolsPath -Force
+              Write-Host "✅ Ghostscript files copied"
+            } else {
+              Write-Host "⚠️ Ghostscript not found at $gsPath. Please install manually."
+            }
+          } else {
+            Write-Host "ℹ️ Ghostscript already exists"
+          }
+
+      - name: Download and setup pdfcpu
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\pdfcpu"
+          $exePath = Join-Path $toolsPath "pdfcpu.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Host "Downloading pdfcpu..."
+            $zipPath = Join-Path $env:TEMP "pdfcpu.zip"
+            Invoke-WebRequest -Uri "https://github.com/pdfcpu/pdfcpu/releases/download/v0.11.0/pdfcpu_0.11.0_Windows_x86_64.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $toolsPath -Force
+            Remove-Item $zipPath
+            Write-Host "✅ pdfcpu installed"
+          } else {
+            Write-Host "ℹ️ pdfcpu already exists"
+          }
+
+      - name: Download and setup QPDF
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\QPDF"
+          $exePath = Join-Path $toolsPath "bin\qpdf.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Host "Downloading QPDF..."
+            $zipPath = Join-Path $env:TEMP "qpdf.zip"
+            Invoke-WebRequest -Uri "https://github.com/qpdf/qpdf/releases/download/v11.9.1/qpdf-11.9.1-msvc64.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $env:TEMP\qpdf_extract -Force
+            # 展開されたディレクトリの中身をコピー
+            $extractedDir = Get-ChildItem "$env:TEMP\qpdf_extract" -Directory | Select-Object -First 1
+            Copy-Item "$($extractedDir.FullName)\*" $toolsPath -Recurse -Force
+            Remove-Item $zipPath
+            Remove-Item "$env:TEMP\qpdf_extract" -Recurse -Force
+            Write-Host "✅ QPDF installed"
+          } else {
+            Write-Host "ℹ️ QPDF already exists"
+          }
+
+      - name: Download and setup Tesseract OCR Data
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\TesseractOCR_Data"
+          $engPath = Join-Path $toolsPath "eng.traineddata"
+          
+          if (-not (Test-Path $engPath)) {
+            Write-Host "Downloading Tesseract OCR Data..."
+            $zipPath = Join-Path $env:TEMP "tessdata.zip"
+            Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/archive/4.1.0.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $env:TEMP\tessdata_extract -Force
+            # 必要なファイルのみコピー
+            $extractedDir = "$env:TEMP\tessdata_extract\tessdata_best-4.1.0"
+            Copy-Item "$extractedDir\eng.traineddata" $toolsPath -Force
+            Copy-Item "$extractedDir\jpn.traineddata" $toolsPath -Force
+            Remove-Item $zipPath
+            Remove-Item "$env:TEMP\tessdata_extract" -Recurse -Force
+            Write-Host "✅ Tesseract OCR Data installed"
+          } else {
+            Write-Host "ℹ️ Tesseract OCR Data already exists"
+          }
+
+      - name: Setup RealEsrgan (Python environment)
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\RealEsrgan\RealEsrgan_Repo"
+          $venvPath = Join-Path $toolsPath "venv"
+          
+          if (-not (Test-Path $venvPath)) {
+            Write-Host "Setting up RealEsrgan Python environment..."
+            
+            # Pythonを検索
+            $pythonPath = $null
+            
+            # PATHから検索
+            $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+            if ($pythonCmd) {
+              $pythonPath = $pythonCmd.Source
+            }
+            
+            # py ランチャーから検索
+            if (-not $pythonPath) {
+              $pyCmd = Get-Command py -ErrorAction SilentlyContinue
+              if ($pyCmd) {
+                $pythonPath = "py"
+              }
+            }
+            
+            if ($pythonPath) {
+              Write-Host "Found Python at: $pythonPath"
+              
+              # venv作成
+              if ($pythonPath -eq "py") {
+                & py -3 -m venv $venvPath
+              } else {
+                & $pythonPath -m venv $venvPath
+              }
+              
+              # 依存関係インストール
+              $activateScript = Join-Path $venvPath "Scripts\Activate.ps1"
+              & $activateScript
+              
+              & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip
+              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+              
+              # Real-ESRGANリポジトリをクローン
+              $repoPath = Join-Path $toolsPath "Real-ESRGAN"
+              if (-not (Test-Path $repoPath)) {
+                git clone https://github.com/xinntao/Real-ESRGAN.git $repoPath
+                Push-Location $repoPath
+                git checkout a4abfb2979a7bbff3f69f58f58ae324608821e27
+                Pop-Location
+              }
+              
+              # weightsディレクトリ作成とモデルダウンロード
+              $weightsPath = Join-Path $repoPath "weights"
+              if (-not (Test-Path $weightsPath)) {
+                New-Item -ItemType Directory -Path $weightsPath -Force | Out-Null
+              }
+              $modelPath = Join-Path $weightsPath "RealESRGAN_x4plus.pth"
+              if (-not (Test-Path $modelPath)) {
+                Write-Host "Downloading RealESRGAN model..."
+                Invoke-WebRequest -Uri "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth" -OutFile $modelPath
+              }
+              
+              # requirements.txtインストール
+              $reqPath = Join-Path $repoPath "requirements.txt"
+              if (Test-Path $reqPath) {
+                & "$venvPath\Scripts\pip.exe" install -r $reqPath
+              }
+              
+              # degradations.pyのパッチ
+              $degradationsPath = Join-Path $venvPath "Lib\site-packages\basicsr\data\degradations.py"
+              if (Test-Path $degradationsPath) {
+                $content = Get-Content $degradationsPath -Raw
+                $content = $content -replace 'from torchvision.transforms.functional_tensor import rgb_to_grayscale', 'from torchvision.transforms.functional import rgb_to_grayscale'
+                Set-Content $degradationsPath $content
+                Write-Host "✅ Patched degradations.py"
+              }
+              
+              # version.py作成
+              $versionPath = Join-Path $repoPath "realesrgan\version.py"
+              if (-not (Test-Path $versionPath)) {
+                New-Item -ItemType File -Path $versionPath -Force | Out-Null
+              }
+              
+              Write-Host "✅ RealEsrgan setup completed"
+            } else {
+              Write-Host "⚠️ Python not found. Please install Python 3.11 or later and ensure it's in PATH."
+            }
+          } else {
+            Write-Host "ℹ️ RealEsrgan already exists"
+          }
+
+      - name: Setup YomiToku (Python environment)
+        shell: pwsh
+        run: |
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\yomitoku"
+          $venvPath = Join-Path $toolsPath "venv"
+          
+          if (-not (Test-Path $venvPath)) {
+            Write-Host "Setting up YomiToku Python environment..."
+            
+            # Pythonを検索
+            $pythonPath = $null
+            
+            # PATHから検索
+            $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+            if ($pythonCmd) {
+              $pythonPath = $pythonCmd.Source
+            }
+            
+            # py ランチャーから検索
+            if (-not $pythonPath) {
+              $pyCmd = Get-Command py -ErrorAction SilentlyContinue
+              if ($pyCmd) {
+                $pythonPath = "py"
+              }
+            }
+            
+            if ($pythonPath) {
+              Write-Host "Found Python at: $pythonPath"
+              
+              # venv作成
+              if ($pythonPath -eq "py") {
+                & py -3 -m venv $venvPath
+              } else {
+                & $pythonPath -m venv $venvPath
+              }
+              
+              # 依存関係インストール
+              & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip
+              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+              & "$venvPath\Scripts\pip.exe" install "yomitoku==0.10.3"
+              
+              Write-Host "✅ YomiToku setup completed"
+            } else {
+              Write-Host "⚠️ Python not found. Please install Python 3.11 or later and ensure it's in PATH."
+            }
+          } else {
+            Write-Host "ℹ️ YomiToku already exists"
           }
 
       - name: Verify deployment
@@ -188,6 +457,8 @@ jobs:
             Write-Host "  Executable: $exePath"
             Write-Host "  Size: $($fileInfo.Length) bytes"
             Write-Host "  Modified: $($fileInfo.LastWriteTime)"
+            Write-Host ""
+            Write-Host "Usage: $exePath [arguments]"
           } else {
             Write-Error "❌ Deployment verification failed! Executable not found."
             exit 1
