@@ -164,7 +164,7 @@ jobs:
         shell: pwsh
         run: |
           $deployPath = "${{ env.DEPLOY_PATH }}"
-          $toolsPath = Join-Path $deployPath "external_tools\external_tools\image_tools"
+          $toolsPath = Join-Path $deployPath "external_tools\image_tools"
           
           # ディレクトリ構造を作成
           $subDirs = @(
@@ -188,7 +188,7 @@ jobs:
       - name: Download and setup ExifTool
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\exiftool-13.30_64"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\exiftool-13.30_64"
           $exePath = Join-Path $toolsPath "exiftool.exe"
           
           if (-not (Test-Path $exePath)) {
@@ -205,7 +205,7 @@ jobs:
       - name: Download and setup ImageMagick
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
           $exePath = Join-Path $toolsPath "magick.exe"
           
           if (-not (Test-Path $exePath)) {
@@ -250,7 +250,7 @@ jobs:
       - name: Download and setup Ghostscript
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\ImageMagick-portable-Q16-HDRI-x64"
           $dllPath = Join-Path $toolsPath "gsdll64.dll"
           
           if (-not (Test-Path $dllPath)) {
@@ -274,7 +274,7 @@ jobs:
       - name: Download and setup pdfcpu
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\pdfcpu"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\pdfcpu"
           $exePath = Join-Path $toolsPath "pdfcpu.exe"
           
           if (-not (Test-Path $exePath)) {
@@ -291,7 +291,7 @@ jobs:
       - name: Download and setup QPDF
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\QPDF"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\QPDF"
           $exePath = Join-Path $toolsPath "bin\qpdf.exe"
           
           if (-not (Test-Path $exePath)) {
@@ -312,7 +312,7 @@ jobs:
       - name: Download and setup Tesseract OCR Data
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\TesseractOCR_Data"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\TesseractOCR_Data"
           $engPath = Join-Path $toolsPath "eng.traineddata"
           
           if (-not (Test-Path $engPath)) {
@@ -334,7 +334,7 @@ jobs:
       - name: Setup RealEsrgan (Python environment)
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\RealEsrgan\RealEsrgan_Repo"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\RealEsrgan\RealEsrgan_Repo"
           $venvPath = Join-Path $toolsPath "venv"
           
           if (-not (Test-Path $venvPath)) {
@@ -426,7 +426,7 @@ jobs:
       - name: Setup YomiToku (Python environment)
         shell: pwsh
         run: |
-          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\external_tools\image_tools\yomitoku"
+          $toolsPath = Join-Path "${{ env.DEPLOY_PATH }}" "external_tools\image_tools\yomitoku"
           $venvPath = Join-Path $toolsPath "venv"
           
           if (-not (Test-Path $venvPath)) {
