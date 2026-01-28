@@ -30,6 +30,11 @@ env:
   BACKUP_PATH: 'C:\SuperBookTools_Backup'
   # .NET バージョン
   DOTNET_VERSION: '6.0'
+  # PyTorch CUDAバージョン
+  # - cu118: CUDA 11.8 (GTX 1080等の古いGPU対応、sm_61以上)
+  # - cu121: CUDA 12.1 (RTX 30系以降、sm_70以上)
+  # - cu124: CUDA 12.4 (RTX 40系以降、sm_70以上)
+  PYTORCH_CUDA_VERSION: 'cu118'
 
 jobs:
   # ビルド・テストジョブ（GitHub提供ランナー）
@@ -372,7 +377,7 @@ jobs:
               & $activateScript
               
               & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip
-              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${{ env.PYTORCH_CUDA_VERSION }}
               
               # Real-ESRGANリポジトリをクローン
               $repoPath = Join-Path $toolsPath "Real-ESRGAN"
@@ -461,7 +466,7 @@ jobs:
               
               # 依存関係インストール
               & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip
-              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+              & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${{ env.PYTORCH_CUDA_VERSION }}
               & "$venvPath\Scripts\pip.exe" install "yomitoku==0.10.3"
               
               Write-Host "✅ YomiToku setup completed"

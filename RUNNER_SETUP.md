@@ -52,6 +52,32 @@
 - インストール時にデフォルト設定でOK
 - インストール先: `C:\Program Files\Git\`
 
+### GPU設定（PyTorch CUDAバージョン）
+
+ワークフローの `PYTORCH_CUDA_VERSION` 変数でPyTorchのCUDAバージョンを設定できます。  
+お使いのGPUに合わせて `.github/workflows/build.yml` の値を変更してください。
+
+| 変数値 | CUDA | 対応GPU |
+|--------|------|---------|
+| `cu118` | 11.8 | **GTX 1080, RTX 20/30/40シリーズ** (sm_61以上) ← デフォルト |
+| `cu121` | 12.1 | RTX 30/40シリーズ (sm_70以上) |
+| `cu124` | 12.4 | RTX 30/40シリーズ (sm_70以上) |
+
+```yaml
+env:
+  # GTX 1080等の古いGPUの場合（デフォルト）
+  PYTORCH_CUDA_VERSION: 'cu118'
+  
+  # 最新GPU (RTX 30/40シリーズ) の場合
+  # PYTORCH_CUDA_VERSION: 'cu121'
+```
+
+> ⚠️ **注意**: CUDAバージョンを変更した場合は、既存のvenv環境を削除してから再デプロイしてください：
+> ```powershell
+> Remove-Item -Recurse -Force "C:\SuperBookTools\external_tools\image_tools\RealEsrgan"
+> Remove-Item -Recurse -Force "C:\SuperBookTools\external_tools\image_tools\yomitoku"
+> ```
+
 ---
 
 ## インストール手順
