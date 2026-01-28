@@ -16,10 +16,41 @@
 
 ## 前提条件
 
+### システム要件
 - Windows 11 (64-bit)
 - PowerShell 5.1 以上
 - インターネット接続
 - GitHubリポジトリへの管理者アクセス権
+
+### 必須ソフトウェア（事前インストール）
+
+以下のソフトウェアを **「すべてのユーザー向け」** にインストールしてください。  
+※ セルフホストランナーは NETWORK SERVICE アカウントで動作するため、ユーザー単位のインストールでは認識されません。
+
+#### 1. Python 3.11 または 3.12（推奨）
+
+- **ダウンロード**: https://www.python.org/downloads/
+- **推奨バージョン**: **Python 3.11.x** または **Python 3.12.x**
+- インストール時に以下を選択：
+  - ✅ **Add Python to PATH**
+  - ✅ **Install for all users**（Customize installationから選択）
+- インストール先: `C:\Program Files\Python3xx\`
+
+> ⚠️ **重要**:
+> - **Microsoft Store版のPython**は使用しないでください。NETWORK SERVICEアカウントからアクセスできません。
+> - **Python 3.13/3.14は使用しないでください**。機械学習ライブラリ（basicsr等）との互換性問題があります。
+
+#### 2. Ghostscript 10.x
+
+- **ダウンロード**: https://ghostscript.com/releases/gsdnld.html
+- 64-bit版をインストール
+- インストール先: `C:\Program Files\gs\gs10.x.x\`
+
+#### 3. Git for Windows
+
+- **ダウンロード**: https://git-scm.com/download/win
+- インストール時にデフォルト設定でOK
+- インストール先: `C:\Program Files\Git\`
 
 ---
 
