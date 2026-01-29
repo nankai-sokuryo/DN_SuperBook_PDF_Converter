@@ -151,12 +151,6 @@ nvidia-smi
 > - 迷ったら `cu126`（デフォルト）で問題ありません
 > - 最新ドライバー（570+）をお使いなら `cu130` も選択可能
 
-> ⚠️ **注意**: CUDAバージョンを変更した場合は、既存のvenv環境を削除してから再デプロイしてください：
-> ```powershell
-> Remove-Item -Recurse -Force "C:\SuperBookTools\external_tools\image_tools\RealEsrgan"
-> Remove-Item -Recurse -Force "C:\SuperBookTools\external_tools\image_tools\yomitoku"
-> ```
-
 ### 自動実行
 
 以下の場合は自動的にワークフローが実行されます：

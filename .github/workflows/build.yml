@@ -378,6 +378,27 @@ jobs:
             Write-Host "ℹ️ Tesseract OCR Data already exists"
           }
 
+      - name: Cleanup Python environments before setup
+        shell: pwsh
+        run: |
+          $deployPath = "${{ env.DEPLOY_PATH }}"
+          
+          # RealEsrgan削除
+          $realEsrganPath = Join-Path $deployPath "external_tools\image_tools\RealEsrgan"
+          if (Test-Path $realEsrganPath) {
+            Write-Host "Removing RealEsrgan..."
+            Remove-Item -Recurse -Force $realEsrganPath
+          }
+          
+          # YomiToku削除
+          $yomitokuPath = Join-Path $deployPath "external_tools\image_tools\yomitoku"
+          if (Test-Path $yomitokuPath) {
+            Write-Host "Removing YomiToku..."
+            Remove-Item -Recurse -Force $yomitokuPath
+          }
+          
+          Write-Host "✅ Cleanup completed"
+
       - name: Setup RealEsrgan (Python environment)
         shell: pwsh
         run: |
