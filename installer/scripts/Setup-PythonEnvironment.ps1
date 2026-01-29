@@ -1,6 +1,6 @@
 # Setup-PythonEnvironment.ps1
-# SuperBookTools Python環境セットアップスクリプト
-# RealEsrgan と YomiToku の環境を構築します
+# SuperBookTools Python Environment Setup Script
+# Sets up RealEsrgan and YomiToku environments
 
 param(
     [Parameter()]
@@ -16,7 +16,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# スクリプトのディレクトリからアプリルートを取得
+# Get app root from script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $appRoot = Split-Path -Parent $scriptDir
 
@@ -34,42 +34,55 @@ function Write-Log {
         }
     }
     
-    # ログファイルに出力
+    # Write to log file
     $logFile = Join-Path $appRoot "setup.log"
     Add-Content -Path $logFile -Value $logMessage
 }
 
 function Find-Python {
-    Write-Log "Pythonを検索中..."
+    Write-Log "Searching for Python..."
     
-    # PATHから検索
+    # Search in PATH
     $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
     if ($pythonCmd) {
         $version = & python --version 2>&1
-        Write-Log "PATHでPythonを検出: $($pythonCmd.Source) ($version)"
+        Write-Log "Found Python in PATH: $($pythonCmd.Source) ($version)"
         return $pythonCmd.Source
     }
     
-    # py ランチャーから検索
+    # Search using py launcher
     $pyCmd = Get-Command py -ErrorAction SilentlyContinue
     if ($pyCmd) {
         $version = & py --version 2>&1
-        Write-Log "py ランチャーを検出: $version"
+        Write-Log "Found py launcher: $version"
         return "py"
     }
     
-    # 一般的なインストール場所を検索
+    # Search common installation paths (including Microsoft Store version)
+    $localAppData = $env:LOCALAPPDATA
     $commonPaths = @(
+        # Microsoft Store version
+        "$localAppData\Microsoft\WindowsApps\python3.12.exe",
+        "$localAppData\Microsoft\WindowsApps\python3.11.exe",
+        "$localAppData\Microsoft\WindowsApps\python3.exe",
+        "$localAppData\Microsoft\WindowsApps\python.exe",
+        # Standard installer - Program Files
         "C:\Program Files\Python312\python.exe",
         "C:\Program Files\Python311\python.exe",
+        "C:\Program Files\Python310\python.exe",
+        # Standard installer - User install
+        "$env:USERPROFILE\AppData\Local\Programs\Python\Python312\python.exe",
+        "$env:USERPROFILE\AppData\Local\Programs\Python\Python311\python.exe",
+        # Legacy paths
         "C:\Python312\python.exe",
-        "C:\Python311\python.exe"
+        "C:\Python311\python.exe",
+        "C:\Python310\python.exe"
     )
     
     foreach ($path in $commonPaths) {
         if (Test-Path $path) {
             $version = & $path --version 2>&1
-            Write-Log "Pythonを検出: $path ($version)"
+            Write-Log "Found Python at: $path ($version)"
             return $path
         }
     }
@@ -84,78 +97,78 @@ function Setup-RealEsrgan {
     $venvPath = Join-Path $toolsPath "venv"
     
     if ((Test-Path $venvPath) -and (-not $Force)) {
-        Write-Log "RealEsrgan環境は既に存在します。スキップします。" "WARN"
+        Write-Log "RealEsrgan environment already exists. Skipping." "WARN"
         return $true
     }
     
-    Write-Log "RealEsrgan環境をセットアップ中..."
+    Write-Log "Setting up RealEsrgan environment..."
     
     try {
-        # ディレクトリ作成
+        # Create directory
         if (-not (Test-Path $toolsPath)) {
             New-Item -ItemType Directory -Path $toolsPath -Force | Out-Null
         }
         
-        # 既存のvenvを削除（-Force時）
+        # Remove existing venv if -Force
         if ((Test-Path $venvPath) -and $Force) {
-            Write-Log "既存のvenv環境を削除中..."
+            Write-Log "Removing existing venv..."
             Remove-Item -Recurse -Force $venvPath
         }
         
-        # venv作成
-        Write-Log "仮想環境を作成中..."
+        # Create venv
+        Write-Log "Creating virtual environment..."
         if ($PythonPath -eq "py") {
             & py -3 -m venv $venvPath
         } else {
             & $PythonPath -m venv $venvPath
         }
         
-        # pip アップグレード
-        Write-Log "pipをアップグレード中..."
+        # Upgrade pip
+        Write-Log "Upgrading pip..."
         & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip --quiet
         
-        # PyTorchインストール
-        Write-Log "PyTorchをインストール中 ($CudaVer)... これには数分かかります。"
+        # Install PyTorch
+        Write-Log "Installing PyTorch ($CudaVer)... This may take several minutes."
         & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url "https://download.pytorch.org/whl/$CudaVer" --quiet
         
-        # Real-ESRGANリポジトリをクローン
+        # Clone Real-ESRGAN repository
         $repoPath = Join-Path $toolsPath "Real-ESRGAN"
         if (-not (Test-Path $repoPath)) {
-            Write-Log "Real-ESRGANリポジトリをクローン中..."
+            Write-Log "Cloning Real-ESRGAN repository..."
             git clone https://github.com/xinntao/Real-ESRGAN.git $repoPath --quiet
             Push-Location $repoPath
             git checkout a4abfb2979a7bbff3f69f58f58ae324608821e27 --quiet
             Pop-Location
         }
         
-        # モデルダウンロード
+        # Download model
         $weightsPath = Join-Path $repoPath "weights"
         if (-not (Test-Path $weightsPath)) {
             New-Item -ItemType Directory -Path $weightsPath -Force | Out-Null
         }
         $modelPath = Join-Path $weightsPath "RealESRGAN_x4plus.pth"
         if (-not (Test-Path $modelPath)) {
-            Write-Log "RealESRGANモデルをダウンロード中..."
+            Write-Log "Downloading RealESRGAN model..."
             Invoke-WebRequest -Uri "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth" -OutFile $modelPath
         }
         
-        # requirements.txtインストール
+        # Install requirements.txt
         $reqPath = Join-Path $repoPath "requirements.txt"
         if (Test-Path $reqPath) {
-            Write-Log "依存関係をインストール中..."
+            Write-Log "Installing dependencies..."
             & "$venvPath\Scripts\pip.exe" install -r $reqPath --quiet
         }
         
-        # degradations.pyのパッチ
+        # Patch degradations.py
         $degradationsPath = Join-Path $venvPath "Lib\site-packages\basicsr\data\degradations.py"
         if (Test-Path $degradationsPath) {
-            Write-Log "degradations.pyにパッチを適用中..."
+            Write-Log "Patching degradations.py..."
             $content = Get-Content $degradationsPath -Raw
             $content = $content -replace 'from torchvision.transforms.functional_tensor import rgb_to_grayscale', 'from torchvision.transforms.functional import rgb_to_grayscale'
             Set-Content $degradationsPath $content
         }
         
-        # version.py作成
+        # Create version.py
         $versionPath = Join-Path $repoPath "realesrgan\version.py"
         if (-not (Test-Path $versionPath)) {
             $versionDir = Split-Path $versionPath -Parent
@@ -165,11 +178,11 @@ function Setup-RealEsrgan {
             New-Item -ItemType File -Path $versionPath -Force | Out-Null
         }
         
-        Write-Log "RealEsrganセットアップ完了" "OK"
+        Write-Log "RealEsrgan setup completed" "OK"
         return $true
     }
     catch {
-        Write-Log "RealEsrganセットアップ失敗: $_" "ERROR"
+        Write-Log "RealEsrgan setup failed: $_" "ERROR"
         return $false
     }
 }
@@ -181,111 +194,111 @@ function Setup-YomiToku {
     $venvPath = Join-Path $toolsPath "venv"
     
     if ((Test-Path $venvPath) -and (-not $Force)) {
-        Write-Log "YomiToku環境は既に存在します。スキップします。" "WARN"
+        Write-Log "YomiToku environment already exists. Skipping." "WARN"
         return $true
     }
     
-    Write-Log "YomiToku環境をセットアップ中..."
+    Write-Log "Setting up YomiToku environment..."
     
     try {
-        # ディレクトリ作成
+        # Create directory
         if (-not (Test-Path $toolsPath)) {
             New-Item -ItemType Directory -Path $toolsPath -Force | Out-Null
         }
         
-        # 既存のvenvを削除（-Force時）
+        # Remove existing venv if -Force
         if ((Test-Path $venvPath) -and $Force) {
-            Write-Log "既存のvenv環境を削除中..."
+            Write-Log "Removing existing venv..."
             Remove-Item -Recurse -Force $venvPath
         }
         
-        # venv作成
-        Write-Log "仮想環境を作成中..."
+        # Create venv
+        Write-Log "Creating virtual environment..."
         if ($PythonPath -eq "py") {
             & py -3 -m venv $venvPath
         } else {
             & $PythonPath -m venv $venvPath
         }
         
-        # pip アップグレード
-        Write-Log "pipをアップグレード中..."
+        # Upgrade pip
+        Write-Log "Upgrading pip..."
         & "$venvPath\Scripts\python.exe" -m pip install --upgrade pip --quiet
         
-        # PyTorchインストール
-        Write-Log "PyTorchをインストール中 ($CudaVer)... これには数分かかります。"
+        # Install PyTorch
+        Write-Log "Installing PyTorch ($CudaVer)... This may take several minutes."
         & "$venvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url "https://download.pytorch.org/whl/$CudaVer" --quiet
         
-        # YomiTokuインストール
-        Write-Log "YomiTokuをインストール中..."
+        # Install YomiToku
+        Write-Log "Installing YomiToku..."
         & "$venvPath\Scripts\pip.exe" install "yomitoku==0.10.3" --quiet
         
-        Write-Log "YomiTokuセットアップ完了" "OK"
+        Write-Log "YomiToku setup completed" "OK"
         return $true
     }
     catch {
-        Write-Log "YomiTokuセットアップ失敗: $_" "ERROR"
+        Write-Log "YomiToku setup failed: $_" "ERROR"
         return $false
     }
 }
 
-# メイン処理
+# Main
 function Main {
     Write-Log "=========================================="
-    Write-Log "SuperBookTools Python環境セットアップ"
+    Write-Log "SuperBookTools Python Environment Setup"
     Write-Log "=========================================="
-    Write-Log "アプリケーションルート: $appRoot"
-    Write-Log "CUDAバージョン: $CudaVersion"
+    Write-Log "Application Root: $appRoot"
+    Write-Log "CUDA Version: $CudaVersion"
     Write-Log ""
     
-    # Gitの確認
+    # Check Git
     $gitCmd = Get-Command git -ErrorAction SilentlyContinue
     if (-not $gitCmd) {
-        Write-Log "Gitがインストールされていません。" "ERROR"
-        Write-Log "https://git-scm.com/download/win からGitをインストールしてください。"
+        Write-Log "Git is not installed." "ERROR"
+        Write-Log "Please install Git from https://git-scm.com/download/win"
         if (-not $Silent) {
-            Read-Host "Enterキーを押して終了"
+            Read-Host "Press Enter to exit"
         }
         exit 1
     }
     
-    # Pythonの確認
+    # Check Python
     $pythonPath = Find-Python
     if (-not $pythonPath) {
-        Write-Log "Pythonが見つかりません。" "ERROR"
-        Write-Log "https://www.python.org/downloads/ からPython 3.11または3.12をインストールしてください。"
-        Write-Log "インストール時に「Add Python to PATH」と「Install for all users」を選択してください。"
+        Write-Log "Python not found." "ERROR"
+        Write-Log "Please install Python 3.11 or 3.12 from https://www.python.org/downloads/"
+        Write-Log "Make sure to check 'Add Python to PATH' and 'Install for all users' during installation."
         if (-not $Silent) {
-            Read-Host "Enterキーを押して終了"
+            Read-Host "Press Enter to exit"
         }
         exit 1
     }
     
     Write-Log ""
-    Write-Log "--- RealEsrgan セットアップ ---"
+    Write-Log "--- RealEsrgan Setup ---"
     $realEsrganResult = Setup-RealEsrgan -PythonPath $pythonPath -CudaVer $CudaVersion
     
     Write-Log ""
-    Write-Log "--- YomiToku セットアップ ---"
+    Write-Log "--- YomiToku Setup ---"
     $yomitokuResult = Setup-YomiToku -PythonPath $pythonPath -CudaVer $CudaVersion
     
     Write-Log ""
     Write-Log "=========================================="
     if ($realEsrganResult -and $yomitokuResult) {
-        Write-Log "すべてのセットアップが完了しました！" "OK"
+        Write-Log "All setup completed successfully!" "OK"
         $exitCode = 0
     } else {
-        Write-Log "一部のセットアップに失敗しました。" "ERROR"
-        Write-Log "setup.log を確認してください。"
+        Write-Log "Some setup failed." "ERROR"
+        Write-Log "Please check setup.log for details."
         $exitCode = 1
     }
     Write-Log "=========================================="
     
     if (-not $Silent) {
-        Read-Host "Enterキーを押して終了"
+        Read-Host "Press Enter to exit"
     }
     
     exit $exitCode
 }
 
-# 実行
+# Run
 Main

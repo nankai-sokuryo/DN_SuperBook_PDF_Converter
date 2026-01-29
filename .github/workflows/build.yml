@@ -17,10 +17,11 @@ on:
       action:
         description: 'Action to perform'
         required: true
-        default: 'build'
+        default: 'build_only'
         type: choice
         options:
-          - build
+          - build_only
+          - build_and_deploy
           - rollback
       pytorch_cuda:
         description: 'PyTorch CUDA version (requires compatible NVIDIA driver)'
@@ -255,10 +256,11 @@ jobs:
           retention-days: 30
 
   # デプロイジョブ（セルフホストランナー）
+  # ※ workflow_dispatch で action=build_and_deploy を選択した場合のみ実行
   deploy:
     runs-on: self-hosted
     needs: build
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event.inputs.action != 'rollback'
+    if: github.event.inputs.action == 'build_and_deploy'
     timeout-minutes: 15
 
     steps:
