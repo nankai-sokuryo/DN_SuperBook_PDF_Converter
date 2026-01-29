@@ -22,6 +22,16 @@ on:
         options:
           - build
           - rollback
+      pytorch_cuda:
+        description: 'PyTorch CUDA version (requires compatible NVIDIA driver)'
+        required: true
+        default: 'cu126'
+        type: choice
+        options:
+          - cu118
+          - cu126
+          - cu128
+          - cu130
 
 env:
   # デプロイ先フォルダ（セルフホストランナー上のパス）
@@ -30,11 +40,14 @@ env:
   BACKUP_PATH: 'C:\SuperBookTools_Backup'
   # .NET バージョン
   DOTNET_VERSION: '6.0'
-  # PyTorch CUDAバージョン
-  # - cu118: CUDA 11.8 (GTX 1080等の古いGPU対応、sm_61以上)
-  # - cu121: CUDA 12.1 (RTX 30系以降、sm_70以上)
-  # - cu124: CUDA 12.4 (RTX 40系以降、sm_70以上)
-  PYTORCH_CUDA_VERSION: 'cu118'
+  # PyTorch CUDAバージョン（workflow_dispatchから選択、またはデフォルト値）
+  # ※ GPUの世代よりもNVIDIAドライバーのバージョンが重要です
+  # ※ nvidia-smi で表示される「CUDA Version」が選択バージョン以上であることを確認してください
+  # - cu118: CUDA 11.8 (動作確認済み、ドライバー 450.80+)
+  # - cu126: CUDA 12.6 (推奨、ドライバー 525.60+)
+  # - cu128: CUDA 12.8 (ドライバー 555.42+)
+  # - cu130: CUDA 13.0 (最新、ドライバー 570+)
+  PYTORCH_CUDA_VERSION: ${{ github.event.inputs.pytorch_cuda || 'cu126' }}
 
 jobs:
   # ビルド・テストジョブ（GitHub提供ランナー）
@@ -199,10 +212,39 @@ jobs:
           if (-not (Test-Path $exePath)) {
             Write-Host "Downloading ExifTool..."
             $zipPath = Join-Path $env:TEMP "exiftool.zip"
+            $tempExtract = Join-Path $env:TEMP "exiftool_extract"
+            
+            # 一時フォルダをクリーンアップ
+            if (Test-Path $tempExtract) {
+              Remove-Item -Recurse -Force $tempExtract
+            }
+            New-Item -ItemType Directory -Path $tempExtract -Force | Out-Null
+            
             Invoke-WebRequest -Uri "https://filecenter.softether-upload.com/d/260118_003_73929/exiftool-13.30_64.zip" -OutFile $zipPath
-            Expand-Archive -Path $zipPath -DestinationPath $toolsPath -Force
-            Remove-Item $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $tempExtract -Force
+            
+            # ZIPの中にサブフォルダがある場合、その中身をコピー
+            $extractedSubDir = Join-Path $tempExtract "exiftool-13.30_64"
+            if (Test-Path $extractedSubDir) {
+              Write-Host "Moving files from nested folder..."
+              Copy-Item -Path "$extractedSubDir\*" -Destination $toolsPath -Recurse -Force
+            } else {
+              Copy-Item -Path "$tempExtract\*" -Destination $toolsPath -Recurse -Force
+            }
+            
+            # exiftool(-k).exe を exiftool.exe にリネーム
+            $srcExe = Join-Path $toolsPath "exiftool(-k).exe"
+            if (Test-Path $srcExe) {
+              Write-Host "Renaming exiftool(-k).exe to exiftool.exe..."
+              Rename-Item -Path $srcExe -NewName "exiftool.exe" -Force
+            }
+            
+            # クリーンアップ
+            Remove-Item $zipPath -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue
+            
             Write-Host "✅ ExifTool installed"
+            Get-ChildItem $toolsPath | Format-Table Name
           } else {
             Write-Host "ℹ️ ExifTool already exists"
           }
