@@ -28,7 +28,6 @@ on:
         default: 'cu126'
         type: choice
         options:
-          - cu118
           - cu126
           - cu128
           - cu130
@@ -41,9 +40,6 @@ env:
   # .NET バージョン
   DOTNET_VERSION: '6.0'
   # PyTorch CUDAバージョン（workflow_dispatchから選択、またはデフォルト値）
-  # ※ GPUの世代よりもNVIDIAドライバーのバージョンが重要です
-  # ※ nvidia-smi で表示される「CUDA Version」が選択バージョン以上であることを確認してください
-  # - cu118: CUDA 11.8 (動作確認済み、ドライバー 450.80+)
   # - cu126: CUDA 12.6 (推奨、ドライバー 525.60+)
   # - cu128: CUDA 12.8 (ドライバー 555.42+)
   # - cu130: CUDA 13.0 (最新、ドライバー 570+)
