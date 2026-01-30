@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Basic\SuperPdfUtil.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Basic\SuperBookExternalTools.cs" />
   </ItemGroup>
 </Project>

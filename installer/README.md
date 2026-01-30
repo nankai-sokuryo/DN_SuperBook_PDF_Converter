@@ -20,7 +20,8 @@ installer/
 - CUDAバージョンをインストール時に選択可能
 
 ### 含まれるもの
-- SuperBookToolsアプリケーション本体
+- SuperBookToolsアプリケーション本体（CLI版）
+- SuperBookToolsアプリケーション本体（GUI版）
 - ExifTool
 - ImageMagick
 - pdfcpu
@@ -41,13 +42,16 @@ installer/
 ### ビルド手順
 
 ```powershell
-# 1. アプリケーションをビルド
+# 1. CLI版アプリケーションをビルド
 dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj -c Release -r win-x64 --self-contained true -o ./publish/win-x64
 
-# 2. 外部ツールをダウンロード（手動またはスクリプトで）
+# 2. GUI版アプリケーションをビルド（同じディレクトリに出力してDLLを共有）
+dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj -c Release -r win-x64 --self-contained true -o ./publish/win-x64
+
+# 3. 外部ツールをダウンロード（手動またはスクリプトで）
 # ./installer/tools/ に配置
 
-# 3. インストーラをビルド
+# 4. インストーラをビルド
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./installer/SuperBookTools.iss
 ```
 

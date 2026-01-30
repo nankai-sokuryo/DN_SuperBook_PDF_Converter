@@ -39,51 +39,98 @@ function Write-Log {
     Add-Content -Path $logFile -Value $logMessage
 }
 
+function Test-PythonWorks {
+    param([string]$PythonPath)
+    
+    try {
+        if ($PythonPath -eq "py") {
+            $result = & py --version 2>&1
+        } else {
+            $result = & $PythonPath --version 2>&1
+        }
+        
+        # Check if output contains valid Python version (e.g., "Python 3.12.9")
+        if ($result -match "Python\s+(\d+)\.(\d+)\.(\d+)") {
+            $major = [int]$matches[1]
+            $minor = [int]$matches[2]
+            # Require Python 3.10 or higher
+            if ($major -eq 3 -and $minor -ge 10) {
+                return $result
+            }
+            Write-Log "Python version too old: $result (requires 3.10+)" "WARN"
+            return $null
+        }
+        return $null
+    }
+    catch {
+        return $null
+    }
+}
+
 function Find-Python {
     Write-Log "Searching for Python..."
     
-    # Search in PATH
+    # Search in PATH (excluding WindowsApps stub first)
     $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
     if ($pythonCmd) {
-        $version = & python --version 2>&1
-        Write-Log "Found Python in PATH: $($pythonCmd.Source) ($version)"
-        return $pythonCmd.Source
+        # Skip WindowsApps stub - it may not be a real Python
+        if ($pythonCmd.Source -notlike "*WindowsApps*") {
+            $version = Test-PythonWorks -PythonPath $pythonCmd.Source
+            if ($version) {
+                Write-Log "Found Python in PATH: $($pythonCmd.Source) ($version)"
+                return $pythonCmd.Source
+            }
+        }
     }
     
     # Search using py launcher
     $pyCmd = Get-Command py -ErrorAction SilentlyContinue
     if ($pyCmd) {
-        $version = & py --version 2>&1
-        Write-Log "Found py launcher: $version"
-        return "py"
+        $version = Test-PythonWorks -PythonPath "py"
+        if ($version) {
+            Write-Log "Found py launcher: $version"
+            return "py"
+        }
     }
     
-    # Search common installation paths (including Microsoft Store version)
+    # Search common installation paths
     $localAppData = $env:LOCALAPPDATA
     $commonPaths = @(
-        # Microsoft Store version
-        "$localAppData\Microsoft\WindowsApps\python3.12.exe",
-        "$localAppData\Microsoft\WindowsApps\python3.11.exe",
-        "$localAppData\Microsoft\WindowsApps\python3.exe",
-        "$localAppData\Microsoft\WindowsApps\python.exe",
-        # Standard installer - Program Files
+        # Standard installer - Program Files (prioritize)
         "C:\Program Files\Python312\python.exe",
         "C:\Program Files\Python311\python.exe",
         "C:\Program Files\Python310\python.exe",
         # Standard installer - User install
         "$env:USERPROFILE\AppData\Local\Programs\Python\Python312\python.exe",
         "$env:USERPROFILE\AppData\Local\Programs\Python\Python311\python.exe",
+        "$env:USERPROFILE\AppData\Local\Programs\Python\Python310\python.exe",
         # Legacy paths
         "C:\Python312\python.exe",
         "C:\Python311\python.exe",
-        "C:\Python310\python.exe"
+        "C:\Python310\python.exe",
+        # Microsoft Store version (check last - may be stub)
+        "$localAppData\Microsoft\WindowsApps\python3.12.exe",
+        "$localAppData\Microsoft\WindowsApps\python3.11.exe",
+        "$localAppData\Microsoft\WindowsApps\python3.exe",
+        "$localAppData\Microsoft\WindowsApps\python.exe"
     )
     
     foreach ($path in $commonPaths) {
         if (Test-Path $path) {
-            $version = & $path --version 2>&1
-            Write-Log "Found Python at: $path ($version)"
-            return $path
+            $version = Test-PythonWorks -PythonPath $path
+            if ($version) {
+                Write-Log "Found Python at: $path ($version)"
+                return $path
+            }
+        }
+    }
+    
+    # Also check PATH python again if it was WindowsApps (in case Store version is actually installed)
+    if ($pythonCmd -and $pythonCmd.Source -like "*WindowsApps*") {
+        $version = Test-PythonWorks -PythonPath $pythonCmd.Source
+        if ($version) {
+            Write-Log "Found Python (Store) in PATH: $($pythonCmd.Source) ($version)"
+            return $pythonCmd.Source
         }
     }
     
@@ -264,13 +311,39 @@ function Main {
     # Check Python
     $pythonPath = Find-Python
     if (-not $pythonPath) {
-        Write-Log "Python not found." "ERROR"
-        Write-Log "Please install Python 3.11 or 3.12 from https://www.python.org/downloads/"
-        Write-Log "Make sure to check 'Add Python to PATH' and 'Install for all users' during installation."
+        Write-Log "" 
+        Write-Log "=========================================="
+        Write-Log "  Python is NOT installed" "WARN"
+        Write-Log "=========================================="
+        Write-Log ""
+        Write-Log "Python 3.10 or higher is required to set up AI features." "WARN"
+        Write-Log "(RealEsrgan image upscaling & YomiToku OCR)"
+        Write-Log ""
+        Write-Log "To install Python:"
+        Write-Log "  1. Visit: https://www.python.org/downloads/windows/"
+        Write-Log "  2. Click 'Latest Python 3 Release' or download Python 3.12.x"
+        Write-Log "  3. Scroll down and click 'Windows installer (64-bit)'"
+        Write-Log "  4. Run the downloaded installer"
+        Write-Log "  5. IMPORTANT: Check 'Add Python to PATH' at the bottom"
+        Write-Log "  6. Click 'Install Now' (or Customize for all users)"
+        Write-Log ""
+        Write-Log "After installing Python, run this script again."
+        Write-Log ""
+        Write-Log "NOTE: SuperBookTools basic features will work without Python." "OK"
+        Write-Log "      Only AI-powered features require Python environment."
+        Write-Log ""
+        
         if (-not $Silent) {
+            Write-Host ""
+            Write-Host "Would you like to open the Python download page? (Y/N): " -NoNewline -ForegroundColor Yellow
+            $response = Read-Host
+            if ($response -eq 'Y' -or $response -eq 'y') {
+                Start-Process "https://www.python.org/downloads/windows/"
+            }
+            Write-Host ""
             Read-Host "Press Enter to exit"
         }
-        exit 1
+        exit 0  # Exit with 0 since this is not a fatal error
     }
     
     Write-Log ""

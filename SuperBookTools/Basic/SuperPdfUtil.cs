@@ -47,7 +47,6 @@ using ImagePoint = SixLabors.ImageSharp.Point; // ImageSharp の Point
 using Tesseract;
 
 using SuperBookTools;
-using SuperBookTools.App;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.ColorSpaces.Conversion;
 using SixLabors.ImageSharp.ColorSpaces;

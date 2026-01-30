@@ -39,7 +39,7 @@ env:
   # バックアップフォルダ
   BACKUP_PATH: 'C:\SuperBookTools_Backup'
   # .NET バージョン
-  DOTNET_VERSION: '6.0'
+  DOTNET_VERSION: '10.0'
   # PyTorch CUDAバージョン（workflow_dispatchから選択、またはデフォルト値）
   # - cu126: CUDA 12.6 (推奨、ドライバー 525.60+)
   # - cu128: CUDA 12.8 (ドライバー 555.42+)
@@ -83,7 +83,7 @@ jobs:
         continue-on-error: true
 
       # Releaseビルドのみ: 自己完結型パッケージを作成
-      - name: Publish self-contained application
+      - name: Publish self-contained application (CLI)
         if: matrix.configuration == 'Release'
         run: |
           dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
@@ -92,12 +92,22 @@ jobs:
             --self-contained true `
             -o ./publish/win-x64
 
-      # Releaseビルドのみ: アーティファクトをアップロード
+      # Releaseビルドのみ: GUI版の自己完結型パッケージを作成（同じディレクトリに出力してDLLを共有）
+      - name: Publish self-contained application (GUI)
+        if: matrix.configuration == 'Release'
+        run: |
+          dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o ./publish/win-x64
+
+      # Releaseビルドのみ: アーティファクトをアップロード（CLI+GUI統合）
       - name: Upload build artifacts
         if: matrix.configuration == 'Release'
         uses: actions/upload-artifact@v4
         with:
-          name: SuperBookToolsApp-win-x64
+          name: SuperBookTools-win-x64
           path: ./publish/win-x64/
           retention-days: 30
 
@@ -115,7 +125,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: SuperBookToolsApp-win-x64
+          name: SuperBookTools-win-x64
           path: ./publish/win-x64
 
       - name: Setup external tools directory

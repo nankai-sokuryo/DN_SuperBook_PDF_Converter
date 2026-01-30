@@ -1,10 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>13.0</LangVersion>
-    <PackageId>SuperBookToolsApp</PackageId>
+    <PackageId>SuperBookToolsGui</PackageId>
     <Authors>dnobori</Authors>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
@@ -18,7 +20,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>embedded</DebugType>
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-    <RootNamespace>SuperBookToolsApp</RootNamespace>
+    <RootNamespace>SuperBookToolsGui</RootNamespace>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <NuGetAudit>false</NuGetAudit>
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
@@ -40,30 +42,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="BenchmarkRecords\**" />
-    <Compile Remove="Local\**" />
-    <Compile Remove="Log\**" />
-    <EmbeddedResource Remove="BenchmarkRecords\**" />
-    <EmbeddedResource Remove="Local\**" />
-    <EmbeddedResource Remove="Log\**" />
-    <None Remove="BenchmarkRecords\**" />
-    <None Remove="Local\**" />
-    <None Remove="Log\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="../internal_libs/IPA-DN-Cores/Cores.NET/Cores.Codes/**/*.cs" />
     <Content Include="../internal_libs/IPA-DN-Cores/Cores.NET/Cores.Codes/**/*.cshtml" />
     <EmbeddedResource Include="../internal_libs/IPA-DN-Cores/Cores.NET/Cores.Codes/Resources/**/*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="ResourceRoot/**/*" />
-    <EmbeddedResource Include="ResourceRoot/**/*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Remove="BenchmarkRecords\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -79,13 +60,7 @@
   <ItemGroup>
     <ProjectReference Include="..\internal_libs\IPA-DN-Cores\Cores.NET\Cores.Lib\Cores.Lib.Full.csproj" />
   </ItemGroup>
-  
-  <ItemGroup>
-    <Folder Include="ResourceRoot\Test\" />
-  </ItemGroup>
 
   <Import Project="..\SuperBookTools\SuperBookTools.projitems" Label="Shared" />
-
-  <ProjectExtensions><VisualStudio><UserProperties properties_4launchsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
 </Project>

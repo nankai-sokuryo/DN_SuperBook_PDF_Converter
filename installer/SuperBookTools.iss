@@ -6,6 +6,7 @@
 #define MyAppPublisher "Daiyuu Nobori"
 #define MyAppURL "https://github.com/IPA-CyberLab/DN_SuperBook_PDF_Converter"
 #define MyAppExeName "SuperBookToolsApp.exe"
+#define MyAppGuiExeName "SuperBookToolsGui.exe"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -46,7 +47,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; アプリケーション本体
+; アプリケーション本体（CLI版 + GUI版、DLL共有）
 Source: "..\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; 外部ツール（静的ツールのみ - Python環境は含まない）
@@ -66,9 +67,11 @@ Name: "{app}\external_tools\image_tools\yomitoku"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName} GUI"; Filename: "{app}\{#MyAppGuiExeName}"
 Name: "{group}\Python環境セットアップ"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Setup-PythonEnvironment.ps1"""; WorkingDir: "{app}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName} GUI"; Filename: "{app}\{#MyAppGuiExeName}"; Tasks: desktopicon
 
 [Run]
 ; インストール後にPython環境セットアップを実行（オプション）
