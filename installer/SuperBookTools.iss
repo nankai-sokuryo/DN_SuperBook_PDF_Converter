@@ -78,7 +78,7 @@ Name: "{autodesktop}\{#MyAppName} GUI"; Filename: "{app}\{#MyAppGuiExeName}"; Ta
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Setup-PythonEnvironment.ps1"" -CudaVersion cu126"; \
   StatusMsg: "Python環境をセットアップしています（これには数分かかる場合があります）..."; \
   Description: "Python環境をセットアップする（推奨）"; \
-  Flags: postinstall skipifsilent runhidden waituntilterminated; \
+  Flags: postinstall skipifsilent waituntilterminated; \
   Check: ShouldSetupPython
 
 [UninstallDelete]
