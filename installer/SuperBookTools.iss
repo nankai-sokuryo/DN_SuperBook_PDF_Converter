@@ -74,12 +74,10 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{autodesktop}\{#MyAppName} GUI"; Filename: "{app}\{#MyAppGuiExeName}"; Tasks: desktopicon
 
 [Run]
-; インストール後にPython環境セットアップを実行（オプション）
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Setup-PythonEnvironment.ps1"" -CudaVersion cu126"; \
+; インストール後にPython環境セットアップを必ず実行（完了するまでインストーラは閉じない）
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Setup-PythonEnvironment.ps1"" -CudaVersion {code:GetCudaVersion}"; \
   StatusMsg: "Python環境をセットアップしています（これには数分かかる場合があります）..."; \
-  Description: "Python環境をセットアップする（推奨）"; \
-  Flags: postinstall skipifsilent waituntilterminated; \
-  Check: ShouldSetupPython
+  Flags: waituntilterminated
 
 [UninstallDelete]
 ; アンインストール時にPython環境を削除
@@ -88,35 +86,20 @@ Type: filesandordirs; Name: "{app}\external_tools\image_tools\yomitoku"
 
 [Code]
 var
-  SetupPythonPage: TInputOptionWizardPage;
   CudaVersionPage: TInputOptionWizardPage;
   SelectedCudaVersion: String;
 
-function ShouldSetupPython: Boolean;
-begin
-  Result := SetupPythonPage.Values[0];
-end;
-
 procedure InitializeWizard;
 begin
-  // Python環境セットアップの選択ページ
-  SetupPythonPage := CreateInputOptionPage(wpSelectTasks,
-    'Python環境のセットアップ',
-    'AI機能（OCR、画像超解像）を使用するにはPython環境が必要です。',
-    'Python環境をインストール後にセットアップしますか？' + #13#10 + #13#10 +
-    '※ 約5GBのディスク容量と、インターネット接続が必要です。' + #13#10 +
-    '※ セットアップには10〜30分程度かかります。' + #13#10 +
-    '※ 後から「Python環境セットアップ」ショートカットで実行することもできます。',
-    True, False);
-  SetupPythonPage.Add('Python環境をセットアップする（推奨）');
-  SetupPythonPage.Values[0] := True;
-  
   // CUDAバージョン選択ページ
-  CudaVersionPage := CreateInputOptionPage(SetupPythonPage.ID,
+  CudaVersionPage := CreateInputOptionPage(wpSelectTasks,
     'CUDA バージョンの選択',
     'お使いのNVIDIAドライバーに対応したCUDAバージョンを選択してください。',
     'nvidia-smi コマンドで「CUDA Version」を確認できます。' + #13#10 + #13#10 +
-    '不明な場合は「cu126（推奨）」を選択してください。',
+    '不明な場合は「cu126（推奨）」を選択してください。' + #13#10 + #13#10 +
+    '※ インストール後、Python環境のセットアップが自動的に実行されます。' + #13#10 +
+    '※ 約5GBのディスク容量と、インターネット接続が必要です。' + #13#10 +
+    '※ セットアップには10〜30分程度かかります。',
     True, False);
   CudaVersionPage.Add('cu126 - CUDA 12.6（推奨、ドライバー 525.60以上）');
   CudaVersionPage.Add('cu128 - CUDA 12.8（ドライバー 555.42以上）');
@@ -143,14 +126,6 @@ begin
   end;
 end;
 
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := False;
-  // Python環境をセットアップしない場合はCUDAバージョン選択をスキップ
-  if (PageID = CudaVersionPage.ID) and (not SetupPythonPage.Values[0]) then
-    Result := True;
-end;
-
 function GetCudaVersion(Param: String): String;
 begin
   Result := SelectedCudaVersion;
@@ -161,16 +136,7 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoType
 begin
   Result := '';
   Result := Result + MemoDirInfo + NewLine + NewLine;
-  
-  if SetupPythonPage.Values[0] then
-  begin
-    Result := Result + 'Python環境:' + NewLine;
-    Result := Result + Space + 'セットアップする' + NewLine;
-    Result := Result + Space + 'CUDAバージョン: ' + SelectedCudaVersion + NewLine + NewLine;
-  end
-  else
-  begin
-    Result := Result + 'Python環境:' + NewLine;
-    Result := Result + Space + 'スキップ（後で手動セットアップ可能）' + NewLine + NewLine;
-  end;
+  Result := Result + 'Python環境:' + NewLine;
+  Result := Result + Space + 'セットアップする' + NewLine;
+  Result := Result + Space + 'CUDAバージョン: ' + SelectedCudaVersion + NewLine + NewLine;
 end;

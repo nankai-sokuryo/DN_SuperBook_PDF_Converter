@@ -28,8 +28,18 @@ namespace SuperBookToolsGui
     public MainWindow()
     {
         InitializeComponent();
+        this.Closing += MainWindow_Closing;
         Log("SuperBookTools GUI started.");
         Log($"Application root: {Env.AppRootDir}");
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // Cancel any running operation
+        _cts?.Cancel();
+        
+        // Shutdown the application properly
+        Application.Current.Shutdown();
     }
 
     private void Log(string message)
