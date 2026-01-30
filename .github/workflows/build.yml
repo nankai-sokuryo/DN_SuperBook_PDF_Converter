@@ -102,17 +102,18 @@ jobs:
             --self-contained true `
             -o ./publish/win-x64-gui
 
-      # GUI版のファイルをメインディレクトリにコピー（WPF依存DLLを上書き）
+      # GUI版の全ファイルをメインディレクトリにマージ（上書きコピー）
       - name: Merge GUI files into main publish directory
         if: matrix.configuration == 'Release'
         shell: pwsh
         run: |
-          # GUI版のEXE/DLLをコピー
-          Copy-Item ./publish/win-x64-gui/SuperBookToolsGui.exe -Destination ./publish/win-x64/ -Force
-          Copy-Item ./publish/win-x64-gui/SuperBookToolsGui.dll -Destination ./publish/win-x64/ -Force
-          # WPF依存のDLLを上書きコピー（.NET 10版を確保）
-          Copy-Item ./publish/win-x64-gui/System.Configuration.ConfigurationManager.dll -Destination ./publish/win-x64/ -Force
-          Copy-Item ./publish/win-x64-gui/System.Windows.Extensions.dll -Destination ./publish/win-x64/ -Force
+          # GUI版の全ファイルを上書きコピー（WPF/WindowsForms関連DLLを含む）
+          Get-ChildItem ./publish/win-x64-gui/* -Recurse | ForEach-Object {
+            $dest = $_.FullName.Replace("win-x64-gui", "win-x64")
+            $destDir = Split-Path $dest -Parent
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item $_.FullName -Destination $dest -Force
+          }
           # GUI版の一時ディレクトリを削除
           Remove-Item ./publish/win-x64-gui -Recurse -Force
 
