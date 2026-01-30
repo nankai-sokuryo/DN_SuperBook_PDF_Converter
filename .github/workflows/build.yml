@@ -82,21 +82,21 @@ jobs:
         run: dotnet test -c ${{ matrix.configuration }} -v normal --logger:"console;verbosity=detailed" DN_SuperBook_PDF_Converter_VS2026.sln --no-build
         continue-on-error: true
 
-      # Releaseビルドのみ: 自己完結型パッケージを作成
-      - name: Publish self-contained application (CLI)
+      # Releaseビルドのみ: GUI版を先にpublish（WPF依存のDLLを確保）
+      - name: Publish self-contained application (GUI)
         if: matrix.configuration == 'Release'
         run: |
-          dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
+          dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
             -o ./publish/win-x64
 
-      # Releaseビルドのみ: GUI版の自己完結型パッケージを作成（同じディレクトリに出力してDLLを共有）
-      - name: Publish self-contained application (GUI)
+      # Releaseビルドのみ: CLI版をpublish（GUI版のDLLは上書きしない）
+      - name: Publish self-contained application (CLI)
         if: matrix.configuration == 'Release'
         run: |
-          dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj `
+          dotnet publish SuperBookToolsApp/SuperBookToolsApp.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
