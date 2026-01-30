@@ -82,17 +82,7 @@ jobs:
         run: dotnet test -c ${{ matrix.configuration }} -v normal --logger:"console;verbosity=detailed" DN_SuperBook_PDF_Converter_VS2026.sln --no-build
         continue-on-error: true
 
-      # Releaseビルドのみ: GUI版を先にpublish（WPF依存のDLLを確保）
-      - name: Publish self-contained application (GUI)
-        if: matrix.configuration == 'Release'
-        run: |
-          dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -o ./publish/win-x64
-
-      # Releaseビルドのみ: CLI版をpublish（GUI版のDLLは上書きしない）
+      # Releaseビルドのみ: CLI版をpublish
       - name: Publish self-contained application (CLI)
         if: matrix.configuration == 'Release'
         run: |
@@ -101,6 +91,30 @@ jobs:
             -r win-x64 `
             --self-contained true `
             -o ./publish/win-x64
+
+      # Releaseビルドのみ: GUI版を別ディレクトリにpublish
+      - name: Publish self-contained application (GUI)
+        if: matrix.configuration == 'Release'
+        run: |
+          dotnet publish SuperBookToolsGui/SuperBookToolsGui.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o ./publish/win-x64-gui
+
+      # GUI版のファイルをメインディレクトリにコピー（WPF依存DLLを上書き）
+      - name: Merge GUI files into main publish directory
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          # GUI版のEXE/DLLをコピー
+          Copy-Item ./publish/win-x64-gui/SuperBookToolsGui.exe -Destination ./publish/win-x64/ -Force
+          Copy-Item ./publish/win-x64-gui/SuperBookToolsGui.dll -Destination ./publish/win-x64/ -Force
+          # WPF依存のDLLを上書きコピー（.NET 10版を確保）
+          Copy-Item ./publish/win-x64-gui/System.Configuration.ConfigurationManager.dll -Destination ./publish/win-x64/ -Force
+          Copy-Item ./publish/win-x64-gui/System.Windows.Extensions.dll -Destination ./publish/win-x64/ -Force
+          # GUI版の一時ディレクトリを削除
+          Remove-Item ./publish/win-x64-gui -Recurse -Force
 
       # Releaseビルドのみ: アーティファクトをアップロード（CLI+GUI統合）
       - name: Upload build artifacts
