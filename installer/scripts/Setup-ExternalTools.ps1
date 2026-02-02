@@ -33,8 +33,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ($AppRoot -ne "") {
     $appRoot = $AppRoot
 } else {
-    # Default: parent of script directory (installer/)
-    $appRoot = Split-Path -Parent $scriptDir
+    # Default: repository root (parent of installer/ which is parent of scripts/)
+    # scripts/ -> installer/ -> repo root
+    $installerDir = Split-Path -Parent $scriptDir
+    $appRoot = Split-Path -Parent $installerDir
 }
 
 # Tools base directory - use ToolsPath if provided, otherwise default to external_tools/image_tools

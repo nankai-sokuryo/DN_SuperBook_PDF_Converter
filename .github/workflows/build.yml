@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - "**"
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main
@@ -675,3 +677,64 @@ jobs:
             Write-Error "❌ No backup found at $backupPath. Cannot rollback."
             exit 1
           }
+
+  # リリースジョブ（タグプッシュ時のみ）
+  release:
+    runs-on: windows-latest
+    needs: [build, build-installer]
+    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: SuperBookTools-Installer
+          path: ./release
+
+      - name: Get version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SuperBookTools ${{ steps.version.outputs.TAG }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            ./release/SuperBookTools_Setup_*.exe
+          body: |
+            ## SuperBookTools ${{ steps.version.outputs.TAG }}
+            
+            ### 📥 ダウンロード
+            
+            - **SuperBookTools_Setup_${{ steps.version.outputs.VERSION }}.exe** - Windows用インストーラ
+            
+            ### 📋 インストール方法
+            
+            1. インストーラをダウンロードして実行
+            2. 初回起動時にPython環境が自動セットアップされます（数分かかります）
+            3. NVIDIA GPU（CUDA対応）があるとOCR処理が高速になります
+            
+            ### 🔧 動作要件
+            
+            - Windows 10/11 (64-bit)
+            - .NET 10.0 Runtime（インストーラに同梱）
+            - NVIDIA GPU + CUDA 12.6+（OCR高速化、オプション）
+            
+            ---
+            *自動生成されたリリースノートは以下に続きます*

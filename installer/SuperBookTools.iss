@@ -2,7 +2,7 @@
 ; オンラインインストーラ - 軽量なインストーラでPython環境は初回起動時に構築
 
 #define MyAppName "SuperBookTools"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Daiyuu Nobori"
 #define MyAppURL "https://github.com/IPA-CyberLab/DN_SuperBook_PDF_Converter"
 #define MyAppExeName "SuperBookToolsApp.exe"

@@ -16,6 +16,8 @@ using IPA.Cores.Codes;
 using IPA.Cores.Helper.Codes;
 using static IPA.Cores.Globals.Codes;
 
+using UglyToad.PdfPig;
+
 using SuperBookTools;
 
 namespace SuperBookToolsGui
@@ -77,6 +79,23 @@ namespace SuperBookToolsGui
         private bool _isRunning;
         private GuiConsoleWriter? _consoleWriter;
         private TextWriter? _originalConsoleOut;
+        
+        // Stage-based progress tracking
+        private int _currentFileIndex;
+        private int _totalFiles;
+        private string _currentFileName = "";
+        private int _currentStage;
+        private const int TotalStages = 7;
+        private readonly string[] _stageNames = new[]
+        {
+            "画像抽出",           // Stage 1: PDF → 画像
+            "AI超解像",           // Stage 2: Real-ESRGAN
+            "傾き補正",           // Stage 3: Deskew + Color stats
+            "カラー補正",         // Stage 4: Global color adjustment
+            "ページ番号OCR",      // Stage 5: OCR
+            "最終処理",           // Stage 6: Finalize
+            "PDF生成"             // Stage 7: Build PDF
+        };
 
     public MainWindow()
     {
@@ -90,6 +109,7 @@ namespace SuperBookToolsGui
         
         Log("SuperBookTools GUI started.");
         Log($"Application root: {Env.AppRootDir}");
+        Log($"Log directory: {Path.Combine(Env.AppRootDir, "Log")}");
     }
     
     private void LogFromConsole(string message)
@@ -97,10 +117,93 @@ namespace SuperBookToolsGui
         // Filter out noisy/redundant messages if needed
         if (string.IsNullOrWhiteSpace(message)) return;
         
+        // Detect stage from console output and update progress
+        DetectAndUpdateStage(message);
+        
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}]   {message}\n");
             txtLog.ScrollToEnd();
+        });
+    }
+    
+    private void DetectAndUpdateStage(string message)
+    {
+        int newStage = -1;
+        
+        // Detect stage from console messages
+        if (message.Contains("[PerformPdfAsync]: Starting"))
+        {
+            // New file started - reset to stage 1
+            newStage = 1;
+        }
+        else if (message.Contains("magick.exe") && message.Contains("-density"))
+        {
+            // Stage 1: ImageMagick extracting images from PDF
+            newStage = 1;
+        }
+        else if (message.Contains("Real-ESRGAN:") || message.Contains("realesrgan"))
+        {
+            // Stage 2: AI upscaling
+            newStage = 2;
+        }
+        else if (message.StartsWith("Loading ") && (message.Contains(".bmp") || message.Contains(".png")))
+        {
+            // Stage 3: Loading images for deskew
+            newStage = 3;
+        }
+        else if (message.StartsWith("Processing ") && (message.Contains(".bmp") || message.Contains(".png")))
+        {
+            // Stage 4: Color adjustment
+            newStage = 4;
+        }
+        else if (message.Contains("OcrProcessForBookAsync") || message.Contains("Doing OCR"))
+        {
+            // Stage 5: OCR
+            newStage = 5;
+        }
+        else if (message.StartsWith("Finalizing "))
+        {
+            // Stage 6: Finalizing output
+            newStage = 6;
+        }
+        else if (message.Contains("Building ") && message.Contains(".pdf"))
+        {
+            // Stage 7: Building PDF
+            newStage = 7;
+        }
+        else if (message.Contains("[PerformPdfAsync]: Completed"))
+        {
+            // File completed
+            newStage = TotalStages;
+        }
+        
+        if (newStage > 0 && newStage != _currentStage)
+        {
+            _currentStage = newStage;
+            UpdateStageProgress();
+        }
+    }
+    
+    private void UpdateStageProgress()
+    {
+        if (_totalFiles <= 0) return;
+        
+        // Calculate overall progress: (completedFiles * TotalStages + currentStage) / (totalFiles * TotalStages)
+        int overallProgress = (_currentFileIndex * TotalStages) + _currentStage;
+        int overallTotal = _totalFiles * TotalStages;
+        
+        string stageName = _currentStage > 0 && _currentStage <= _stageNames.Length 
+            ? _stageNames[_currentStage - 1] 
+            : "";
+        
+        string status = $"[{_currentFileIndex + 1}/{_totalFiles}] Stage {_currentStage}/{TotalStages}: {stageName}";
+        
+        Dispatcher.BeginInvoke(DispatcherPriority.Normal, () =>
+        {
+            progressBar.Maximum = overallTotal;
+            progressBar.Value = overallProgress;
+            txtProgress.Text = status;
         });
     }
 
@@ -167,6 +270,7 @@ namespace SuperBookToolsGui
 
     private void Log(string message)
     {
+        // Write to GUI only - detailed logs are written by CoresLib to Log/Info/
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\n");
@@ -338,19 +442,26 @@ namespace SuperBookToolsGui
             .OrderBy(x => x.FullPath, StrCmpi)
             .ToList();
 
-        int numTotal = srcFiles.Count;
+        int numFiles = srcFiles.Count;
         int numOk = 0;
         int numError = 0;
         int numSkip = 0;
 
-        Log($"Found {numTotal} PDF files.");
+        Log($"Found {numFiles} PDF files.");
 
-        if (numTotal == 0)
+        if (numFiles == 0)
         {
             Log("No PDF files found in source directory.");
             MessageBox.Show("No PDF files found in the source directory.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+
+        // Initialize stage-based progress tracking
+        _totalFiles = numFiles;
+        _currentFileIndex = 0;
+        _currentStage = 0;
+        
+        UpdateProgress(0, numFiles * TotalStages, "Starting...");
 
         var options = new SuperPerformPdfOptions();
         var errorFiles = new List<string>();
@@ -363,8 +474,13 @@ namespace SuperBookToolsGui
             string relativePath = PP.GetRelativeFileName(src.FullPath, srcDir);
             string dstPath = PP.Combine(dstDir, relativePath);
 
-            UpdateProgress(i + 1, numTotal, $"Processing: {Path.GetFileName(src.FullPath)}");
-            Log($"[{i + 1}/{numTotal}] Processing: {src.Name}");
+            // Update tracking variables for stage detection
+            _currentFileIndex = i;
+            _currentFileName = Path.GetFileName(src.FullPath);
+            _currentStage = 0;
+            
+            UpdateStageProgress();
+            Log($"[{i + 1}/{numFiles}] Processing: {src.Name}");
 
             try
             {
@@ -423,10 +539,11 @@ namespace SuperBookToolsGui
         // Summary
         Log("");
         Log("========== CONVERSION COMPLETE ==========");
-        Log($"Total:   {numTotal}");
+        Log($"Files:   {numFiles}");
         Log($"Success: {numOk}");
         Log($"Skipped: {numSkip}");
-        Log($"Errors:  {numError}");;
+        Log($"Errors:  {numError}");
+        Log($"Detailed log: {Path.Combine(Env.AppRootDir, "Log", "Info")}");
 
         if (errorFiles.Count > 0)
         {
@@ -438,9 +555,11 @@ namespace SuperBookToolsGui
             }
         }
 
-        UpdateProgress(numTotal, numTotal, "Complete");
+        // Final progress
+        int finalProgress = _totalFiles * TotalStages;
+        UpdateProgress(finalProgress, finalProgress, "Complete");
 
-        string message = $"Conversion complete!\n\nTotal: {numTotal}\nSuccess: {numOk}\nSkipped: {numSkip}\nErrors: {numError}";
+        string message = $"Conversion complete!\n\nFiles: {numFiles}\nSuccess: {numOk}\nSkipped: {numSkip}\nErrors: {numError}";
         MessageBox.Show(message, "Complete", MessageBoxButton.OK, 
             numError > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }

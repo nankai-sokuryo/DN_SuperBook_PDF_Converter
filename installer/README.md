@@ -121,5 +121,5 @@ powershell -ExecutionPolicy Bypass -File "C:\SuperBookTools\scripts\Setup-Python
 `SuperBookTools.iss` の以下の行を更新：
 
 ```iss
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 ```
