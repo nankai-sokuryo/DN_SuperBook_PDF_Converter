@@ -151,6 +151,11 @@ jobs:
             -SkipSymlink `
             -SkipPython `
             -Force
+          
+          # Debug: List downloaded files
+          Write-Host "📁 Contents of installer/tools:"
+          Get-ChildItem -Path "./installer/tools" -Recurse -Depth 2 | Select-Object FullName | Format-Table -AutoSize
+          
           Write-Host "✅ External tools setup complete"
 
       - name: Install Inno Setup

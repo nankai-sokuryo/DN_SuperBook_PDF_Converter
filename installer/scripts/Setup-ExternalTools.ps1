@@ -82,12 +82,18 @@ function Setup-ImageMagick {
     $toolDir = Join-Path $toolsBase "ImageMagick-portable-Q16-HDRI-x64"
     $marker = Join-Path $toolDir "magick.exe"
     
+    # Ensure tool directory exists
+    if (-not (Test-Path $toolDir)) {
+        New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
+    }
+    
     if ((Test-Path $marker) -and (-not $Force)) {
         Write-Log "ImageMagick already exists. Skipping." "WARN"
         return $true
     }
     
     Write-Log "Setting up ImageMagick..."
+    Write-Log "  Tool directory: $toolDir"
     
     # ImageMagick portable Q16-HDRI x64
     # Dynamically find latest version from binaries page
@@ -136,12 +142,18 @@ function Setup-QPDF {
     $toolDir = Join-Path $toolsBase "QPDF"
     $marker = Join-Path $toolDir "bin\qpdf.exe"
     
+    # Ensure tool directory exists
+    if (-not (Test-Path $toolDir)) {
+        New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
+    }
+    
     if ((Test-Path $marker) -and (-not $Force)) {
         Write-Log "QPDF already exists. Skipping." "WARN"
         return $true
     }
     
     Write-Log "Setting up QPDF..."
+    Write-Log "  Tool directory: $toolDir"
     
     # QPDF releases: https://github.com/qpdf/qpdf/releases
     $version = "11.9.1"
@@ -187,12 +199,18 @@ function Setup-Pdfcpu {
     $toolDir = Join-Path $toolsBase "pdfcpu"
     $marker = Join-Path $toolDir "pdfcpu.exe"
     
+    # Ensure tool directory exists
+    if (-not (Test-Path $toolDir)) {
+        New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
+    }
+    
     if ((Test-Path $marker) -and (-not $Force)) {
         Write-Log "pdfcpu already exists. Skipping." "WARN"
         return $true
     }
     
     Write-Log "Setting up pdfcpu..."
+    Write-Log "  Tool directory: $toolDir"
     
     # pdfcpu releases: https://github.com/pdfcpu/pdfcpu/releases
     $version = "0.11.0"
@@ -227,12 +245,18 @@ function Setup-Exiftool {
     $toolDir = Join-Path $toolsBase "exiftool-13.30_64"
     $marker = Join-Path $toolDir "exiftool.exe"
     
+    # Ensure tool directory exists
+    if (-not (Test-Path $toolDir)) {
+        New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
+    }
+    
     if ((Test-Path $marker) -and (-not $Force)) {
         Write-Log "exiftool already exists. Skipping." "WARN"
         return $true
     }
     
     Write-Log "Setting up exiftool..."
+    Write-Log "  Tool directory: $toolDir"
     
     # exiftool - download from SoftEther mirror (official site blocks automated downloads)
     $url = "https://filecenter.softether-upload.com/d/260118_003_73929/exiftool-13.30_64.zip"
@@ -286,12 +310,18 @@ function Setup-TesseractOCR {
     $toolDir = Join-Path $toolsBase "TesseractOCR_Data"
     $marker = Join-Path $toolDir "eng.traineddata"
     
+    # Ensure tool directory exists
+    if (-not (Test-Path $toolDir)) {
+        New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
+    }
+    
     if ((Test-Path $marker) -and (-not $Force)) {
         Write-Log "TesseractOCR_Data already exists. Skipping." "WARN"
         return $true
     }
     
     Write-Log "Setting up Tesseract OCR Data..."
+    Write-Log "  Tool directory: $toolDir"
     
     # Tesseract OCR trained data (best quality)
     $url = "https://github.com/tesseract-ocr/tessdata_best/archive/refs/tags/4.1.0.zip"
@@ -303,11 +333,6 @@ function Setup-TesseractOCR {
         }
         
         Write-Log "Extracting Tesseract OCR Data..."
-        
-        # Ensure tool directory exists
-        if (-not (Test-Path $toolDir)) {
-            New-Item -ItemType Directory -Path $toolDir -Force | Out-Null
-        }
         
         # Clear directory except .gitignore and _empty.txt
         Get-ChildItem $toolDir -Exclude ".gitignore", "_empty.txt" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
