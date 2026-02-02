@@ -11,14 +11,22 @@ param(
     [switch]$Force,
     
     [Parameter()]
-    [switch]$Silent
+    [switch]$Silent,
+    
+    [Parameter()]
+    [string]$AppRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-# Get app root from script directory
+# Get app root - use parameter if provided, otherwise derive from script location
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$appRoot = Split-Path -Parent $scriptDir
+if ($AppRoot -ne "") {
+    $appRoot = $AppRoot
+} else {
+    # Default: parent of script directory (installer/)
+    $appRoot = Split-Path -Parent $scriptDir
+}
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")

@@ -20,31 +20,154 @@ using SuperBookTools;
 
 namespace SuperBookToolsGui
 {
+    // Custom TextWriter to capture console output and redirect to GUI log
+    public class GuiConsoleWriter : TextWriter
+    {
+        private readonly Action<string> _logAction;
+        private readonly System.Text.StringBuilder _buffer = new();
+        
+        public GuiConsoleWriter(Action<string> logAction)
+        {
+            _logAction = logAction;
+        }
+        
+        public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
+        
+        public override void Write(char value)
+        {
+            if (value == '\n')
+            {
+                Flush();
+            }
+            else if (value != '\r')
+            {
+                _buffer.Append(value);
+            }
+        }
+        
+        public override void Write(string? value)
+        {
+            if (value == null) return;
+            foreach (char c in value)
+            {
+                Write(c);
+            }
+        }
+        
+        public override void WriteLine(string? value)
+        {
+            Write(value);
+            Write('\n');
+        }
+        
+        public override void Flush()
+        {
+            if (_buffer.Length > 0)
+            {
+                string line = _buffer.ToString();
+                _buffer.Clear();
+                _logAction(line);
+            }
+        }
+    }
+
     public partial class MainWindow : Window
     {
         private CancellationTokenSource? _cts;
         private bool _isRunning;
+        private GuiConsoleWriter? _consoleWriter;
+        private TextWriter? _originalConsoleOut;
 
     public MainWindow()
     {
         InitializeComponent();
         this.Closing += MainWindow_Closing;
+        
+        // Setup console output redirection
+        _originalConsoleOut = Console.Out;
+        _consoleWriter = new GuiConsoleWriter(LogFromConsole);
+        Console.SetOut(_consoleWriter);
+        
         Log("SuperBookTools GUI started.");
         Log($"Application root: {Env.AppRootDir}");
     }
+    
+    private void LogFromConsole(string message)
+    {
+        // Filter out noisy/redundant messages if needed
+        if (string.IsNullOrWhiteSpace(message)) return;
+        
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}]   {message}\n");
+            txtLog.ScrollToEnd();
+        });
+    }
+
+    private bool _isShuttingDown;
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        // If already shutting down, allow close
+        if (_isShuttingDown)
+        {
+            return;
+        }
+        
+        // Cancel the close and start async shutdown
+        e.Cancel = true;
+        StartShutdownAsync();
+    }
+    
+    private async void StartShutdownAsync()
+    {
+        if (_isShuttingDown) return;
+        _isShuttingDown = true;
+        
         // Cancel any running operation
         _cts?.Cancel();
         
-        // Shutdown the application properly
+        // Restore original console output
+        if (_originalConsoleOut != null)
+        {
+            Console.SetOut(_originalConsoleOut);
+        }
+        _consoleWriter = null;
+        
+        // Show shutdown message in the UI
+        txtLog.AppendText($"\n[{DateTime.Now:HH:mm:ss}] 終了処理中... しばらくお待ちください。\n");
+        txtLog.ScrollToEnd();
+        
+        // Disable all controls
+        btnStart.IsEnabled = false;
+        btnCancel.IsEnabled = false;
+        txtSourceDir.IsEnabled = false;
+        txtDestDir.IsEnabled = false;
+        chkOcr.IsEnabled = false;
+        
+        // Update title to show shutting down
+        this.Title = "SuperBookTools - 終了処理中...";
+        
+        // Run CoresLib.Free() on background thread while keeping window open
+        await Task.Run(() =>
+        {
+            try
+            {
+                CoresLib.Free();
+            }
+            catch
+            {
+                // Ignore errors during cleanup
+            }
+        });
+        
+        // Now actually close (App.OnExit won't call CoresLib.Free() again)
         Application.Current.Shutdown();
     }
 
     private void Log(string message)
     {
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\n");
             txtLog.ScrollToEnd();
@@ -53,7 +176,7 @@ namespace SuperBookToolsGui
 
     private void UpdateProgress(int current, int total, string status)
     {
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             if (total > 0)
             {
@@ -63,14 +186,23 @@ namespace SuperBookToolsGui
             }
             else
             {
+                progressBar.IsIndeterminate = true;
                 txtProgress.Text = status;
             }
+        });
+    }
+    
+    private void UpdateProgressDetail(string status)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            txtProgress.Text = status;
         });
     }
 
     private void SetRunning(bool running)
     {
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Normal, () =>
         {
             _isRunning = running;
             btnStart.IsEnabled = !running;
@@ -82,6 +214,7 @@ namespace SuperBookToolsGui
             if (!running)
             {
                 progressBar.Value = 0;
+                progressBar.IsIndeterminate = false;
             }
         });
     }
@@ -230,12 +363,16 @@ namespace SuperBookToolsGui
             string relativePath = PP.GetRelativeFileName(src.FullPath, srcDir);
             string dstPath = PP.Combine(dstDir, relativePath);
 
-            UpdateProgress(i + 1, numTotal, Path.GetFileName(src.FullPath));
+            UpdateProgress(i + 1, numTotal, $"Processing: {Path.GetFileName(src.FullPath)}");
             Log($"[{i + 1}/{numTotal}] Processing: {src.Name}");
 
             try
             {
-                bool result = await SuperPdfUtil.PerformPdfAsync(src.FullPath, dstPath, options, useOkFile: true, cancel: ct);
+                // Run the heavy PDF processing on a background thread to keep UI responsive
+                bool result = await Task.Run(async () => 
+                {
+                    return await SuperPdfUtil.PerformPdfAsync(src.FullPath, dstPath, options, useOkFile: true, cancel: ct);
+                }, ct);
                 
                 if (!result)
                 {
@@ -254,6 +391,9 @@ namespace SuperBookToolsGui
                 errorFiles.Add(src.FullPath);
                 Log($"  -> ERROR: {ex.Message}");
             }
+            
+            // Allow UI to update between files
+            await Task.Delay(1, ct);
         }
 
         // Perform OCR if enabled
@@ -263,11 +403,15 @@ namespace SuperBookToolsGui
             
             Log("");
             Log("Starting Japanese OCR processing (YomiToku AI)...");
-            UpdateProgress(0, 0, "Running OCR...");
+            UpdateProgress(0, 0, "Running OCR (this may take a while)...");
 
             try
             {
-                await SuperBookExternalTools.YomiToku.PerformOcrDirAsync(dstDir, PP.Combine(dstDir, SuperBookExternalTools.Post_OCR_Dir), SuperBookExternalTools.Post_OCR_Dir, ct);
+                // Run OCR on background thread to keep UI responsive
+                await Task.Run(async () =>
+                {
+                    await SuperBookExternalTools.YomiToku.PerformOcrDirAsync(dstDir, PP.Combine(dstDir, SuperBookExternalTools.Post_OCR_Dir), SuperBookExternalTools.Post_OCR_Dir, ct);
+                }, ct);
                 Log("OCR processing completed.");
             }
             catch (Exception ex)
@@ -282,7 +426,7 @@ namespace SuperBookToolsGui
         Log($"Total:   {numTotal}");
         Log($"Success: {numOk}");
         Log($"Skipped: {numSkip}");
-        Log($"Errors:  {numError}");
+        Log($"Errors:  {numError}");;
 
         if (errorFiles.Count > 0)
         {

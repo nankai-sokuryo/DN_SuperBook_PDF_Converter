@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 
 using IPA.Cores.Basic;
@@ -10,6 +11,9 @@ namespace SuperBookToolsGui
     {
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Ensure application exits when main window closes
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            
             base.OnStartup(e);
             
             CoresLib.Init(new CoresLibOptions(CoresMode.Application, "SuperBookToolsGui", DebugMode.Debug, 
@@ -18,7 +22,8 @@ namespace SuperBookToolsGui
 
         protected override void OnExit(ExitEventArgs e)
         {
-            CoresLib.Free();
+            // CoresLib.Free() is already called in MainWindow.StartShutdownAsync()
+            // No need to call it again here
             base.OnExit(e);
         }
     }

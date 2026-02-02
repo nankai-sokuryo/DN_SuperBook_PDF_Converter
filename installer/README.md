@@ -6,10 +6,11 @@
 
 ```
 installer/
-├── SuperBookTools.iss          # Inno Setupスクリプト
+├── SuperBookTools.iss              # Inno Setupスクリプト
 ├── scripts/
-│   └── Setup-PythonEnvironment.ps1  # Python環境セットアップスクリプト
-└── tools/                      # ビルド時に自動ダウンロードされる外部ツール
+│   ├── Setup-ExternalTools.ps1     # 外部ツール＋Python環境 統合セットアップスクリプト
+│   └── Setup-PythonEnvironment.ps1 # Python環境セットアップスクリプト
+└── tools/                          # ビルド時に自動ダウンロードされる外部ツール
 ```
 
 ## インストーラの特徴
@@ -32,11 +33,44 @@ installer/
 - RealEsrgan Python環境（〜2.5GB）
 - YomiToku Python環境（〜2.5GB）
 
+## 開発環境セットアップ
+
+開発時に`dotnet run`でGUIアプリを実行するには、外部ツールとPython環境のセットアップが必要です。
+
+### 統合セットアップスクリプト（推奨）
+
+```powershell
+# リポジトリルートで実行
+# 外部ツールのダウンロード + Python環境セットアップ + シンボリックリンク作成
+& "installer\scripts\Setup-ExternalTools.ps1" -AppRoot "."
+
+# CUDAバージョンを指定する場合
+& "installer\scripts\Setup-ExternalTools.ps1" -AppRoot "." -CudaVersion cu130
+
+# Python環境をスキップする場合（外部ツールのみ）
+& "installer\scripts\Setup-ExternalTools.ps1" -AppRoot "." -SkipPython
+
+# 強制再セットアップ
+& "installer\scripts\Setup-ExternalTools.ps1" -AppRoot "." -Force
+```
+
+このスクリプトは以下を実行します：
+1. **シンボリックリンク作成** - `SuperBookToolsGui\external_tools` → `external_tools`
+2. **外部ツールダウンロード** - ImageMagick, QPDF, pdfcpu, exiftool
+3. **Python環境セットアップ** - RealEsrgan, YomiToku（`-SkipPython`で省略可能）
+
+### 個別セットアップ
+
+#### Python環境のみセットアップ
+```powershell
+& "installer\scripts\Setup-PythonEnvironment.ps1" -AppRoot "." -CudaVersion cu126
+```
+
 ## ローカルでのビルド方法
 
 ### 前提条件
 1. [Inno Setup 6](https://jrsoftware.org/isinfo.php) をインストール
-2. .NET 6.0 SDK
+2. .NET 10.0 SDK
 3. PowerShell 5.1以上
 
 ### ビルド手順
