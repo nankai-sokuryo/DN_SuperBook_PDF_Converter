@@ -1,251 +1,82 @@
-# GitHub Actions Self-Hosted Runner セットアップガイド
+# SuperBookTools - スキャン書籍 PDF 高品質化ツール
 
-このドキュメントでは、Windows 11 にGitHub Actions セルフホストランナーをインストールしてSuperBookToolsAppをデプロイする手順を説明します。
+**バージョン: 2.0.0** | 2026/02/03
 
-> 📄 **プロジェクトの概要については [ORIGINAL_README.md](ORIGINAL_README.md) を参照してください。**
+![SuperBookTools GUI](doc_img/15.png)
 
-## 目次
+## 概要
 
-- [前提条件](#前提条件)
-- [インストール手順](#インストール手順)
-- [ワークフローの手動実行](#ワークフローの手動実行)
-- [サービス管理コマンド](#サービス管理コマンド)
-- [トラブルシューティング](#トラブルシューティング)
-- [アンインストール](#アンインストール)
+スキャンした書籍 PDF を、デジタル書籍並みに **クリアで読みやすく** 変換する SuperBookTools のGUIラッパーです。
 
----
+紙の汚れ、裏写り、インクのにじみ、JPEG モアレノイズを AI 技術で除去し、傾き補正・オフセット調整・余白トリミングを自動で行います。さらに、日本語 AI OCR (YomiToku) による検索可能 PDF の生成にも対応しています。
 
-## 前提条件
+## 主な機能
 
-### システム要件
-- Windows 11 (64-bit)
-- PowerShell 5.1 以上
-- インターネット接続
-- GitHubリポジトリへの管理者アクセス権
+- **📖 高画質化・鮮明化**: RealEsrgan AI による画像鮮明化
+- **📐 傾き自動補正**: ページごとの微妙な傾きを自動検出・補正
+- **📏 オフセット自動調整**: ページ番号位置を基準に、各ページの上下左右のズレを自動補正
+- **✂️ 余白自動トリミング**: 画面を最大限活用できるようトリミング
+- **📚 見開き分割**: 見開きスキャン画像を左右に自動分割
+- **🔢 ページ番号同期**: PDF のページ番号と書籍のページ番号を自動同期
+- **🔍 日本語 AI OCR**: YomiToku による高精度 OCR (PDF/HTML/Markdown/JSON 出力)
 
-> 💡 **Visual Studio は不要です**  
-> ビルドはGitHub提供ランナー上で行われるため、.NET SDKやVisual Studioをインストールする必要はありません。セルフホストランナーはデプロイ処理のみを担当します。
+機能詳細とコマンドライン版については [ORIGINAL_README.md](ORIGINAL_README.md) を参照してください。
 
-### 必須ソフトウェア（事前インストール）
+## 動作環境
 
-以下のソフトウェアを **「すべてのユーザー向け」** にインストールしてください。  
+- **OS**: Windows 10/11 (64-bit)
+- **メモリ**: 16GB 以上推奨
+- **GPU**: NVIDIA GPU 推奨 (AI 処理高速化)
+- **ストレージ**: 十分な空き容量 (処理中に一時ファイルを生成)
 
-#### 1. Python 3.11 または 3.12
+## インストール
 
-- **ダウンロード**: https://www.python.org/downloads/
-- インストール時に以下を選択：
-  - ✅ **Add Python to PATH**
-  - ✅ **Install for all users**（Customize installationから選択）
-- インストール先: `C:\Program Files\Python3xx\`
+1. [Releases](https://github.com/nankai-sokuryo/DN_SuperBook_PDF_Converter/releases) ページから最新の `SuperBookTools_Setup_x.x.x.exe` をダウンロード
+2. インストーラーを実行
+3. 画面の指示に従ってインストール
 
-> ⚠️ **重要**:
-> - **Microsoft Store版のPython**はユーザフォルダにインストールされるため、NETWORK SERVICEアカウントで動くセルフホストランナーから使用できません。
-> - **Python 3.13/3.14は使用しないでください**。機械学習ライブラリ（basicsr等）との互換性問題があります。
+## 使い方
 
-#### 2. Ghostscript 10.x
+### 基本的な使い方
 
-- **ダウンロード**: https://ghostscript.com/releases/gsdnld.html
-- 64-bit版をインストール
-- インストール先: `C:\Program Files\gs\gs10.x.x\`
+1. **Source Directory**: 変換元の PDF が格納されたフォルダを選択
+2. **Output Directory**: 変換後の PDF を出力するフォルダを選択
+3. 必要に応じてオプションを設定
+4. **Start Conversion** をクリック
 
-#### 3. Git for Windows
+### オプション設定
 
-- **ダウンロード**: https://git-scm.com/download/win
-- インストール時にデフォルト設定でOK
-- インストール先: `C:\Program Files\Git\`
+| オプション | 説明 |
+|-----------|------|
+| **見開き画像を分割** | 見開きでスキャンされた画像を左右に分割します |
+| **右開き/左開き** | 「右開き」、「左開き」を選択 |
+| **傾き補正上限** | 傾き補正の最大角度 (1°/5°/10°) を選択。大きい値にすると大きな傾きも補正されますが、誤補正のリスクも増加します |
+| **Enable Japanese OCR** | YomiToku AI による日本語 OCR を有効化。検索可能 PDF および HTML/Markdown/JSON を出力します |
 
----
+### 処理ステージ
 
-## インストール手順
+変換処理は以下の 7 ステージで進行します:
 
-### Step 1: GitHubでRunnerトークンを取得
+1. **Stage 1/7**: PDF → 画像展開
+2. **Stage 2/7**: 見開き分割 (オプション)
+3. **Stage 3/7**: AI 高解像度化 (RealEsrgan)
+4. **Stage 4/7**: 余白検出・トリミング
+5. **Stage 5/7**: ページ番号 OCR・オフセット調整
+6. **Stage 6/7**: 傾き補正
+7. **Stage 7/7**: PDF 生成
 
-1. リポジトリの **Settings** を開く
-2. 左メニューから **Actions** → **Runners** を選択
-3. **New self-hosted runner** ボタンをクリック
-4. **Windows** を選択
-5. 表示される**トークン**をコピーしておく（有効期限あり）
+## 外部ツール
 
-### Step 2: Runnerのダウンロードと解凍
+本ソフトウェアは以下の外部ツールを使用しています:
 
-PowerShellを **管理者として実行** し、以下のコマンドを順番に実行します：
+- [ImageMagick](https://imagemagick.org/) - 画像処理
+- [RealEsrgan](https://github.com/xinntao/Real-ESRGAN) - AI 画像高解像度化
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) - ページ番号 OCR
+- [QPDF](https://qpdf.sourceforge.io/) - PDF 処理
+- [pdfcpu](https://pdfcpu.io/) - PDF 処理
+- [ExifTool](https://exiftool.org/) - メタデータ処理
+- [YomiToku](https://github.com/kotaro-kinoshita/yomitoku) - 日本語 AI OCR (オプション)
 
-```powershell
-# Runnerをインストールするフォルダを作成
-mkdir C:\actions-runner
-cd C:\actions-runner
+## ライセンス
 
-# 最新のRunnerパッケージをダウンロード
-# ※バージョン番号は最新版に置き換えてください
-Invoke-WebRequest -Uri https://github.com/actions/runner/releases/download/v2.331.0/actions-runner-win-x64-2.331.0.zip -OutFile actions-runner-win-x64.zip
-
-# ZIPファイルを解凍
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD\actions-runner-win-x64.zip", "$PWD")
-
-# ダウンロードしたZIPファイルを削除（任意）
-Remove-Item actions-runner-win-x64.zip
-```
-
-> 💡 **最新バージョンの確認**: https://github.com/actions/runner/releases
-
-### Step 3: Runnerの設定
-
-```powershell
-# 設定スクリプトを実行（トークンを作成したページのコマンドをコピペ）
-# <OWNER>: GitHubユーザー名またはOrganization名
-# <REPO>: リポジトリ名
-# <TOKEN>: Step 1で取得したトークン
-
-.\config.cmd --url https://github.com/<OWNER>/<REPO> --token <TOKEN>
-```
-
-**設定時の質問と推奨回答:**
-
-| 質問 | 推奨回答 |
-|------|----------|
-| Enter the name of the runner group | `Default` (Enterキー) |
-| Enter the name of runner | `windows-11-runner` (任意の名前) |
-| Enter any additional labels | `windows,x64,win11` (任意) |
-| Enter name of work folder | `_work` (Enterキー) |
-| **Would you like to run the runner as service? (Y/N)** | **`Y` (推奨)** |
-| User account to use for the service | `NT AUTHORITY\NETWORK SERVICE` (Enterキー) |
-
----
-
-## ワークフローの手動実行
-
-GitHub UIからワークフローを手動で実行できます。
-
-### 手順
-
-1. GitHubリポジトリの **Actions** タブを開く
-2. 左サイドバーから **Build, Test and Deploy** を選択
-3. 右上の **Run workflow** ボタンをクリック
-4. オプションを選択：
-   - **Action to perform**: `build`（通常）または `rollback`（前のバージョンに戻す）
-   - **PyTorch CUDA version**: GPUに合わせて選択
-5. **Run workflow** ボタン（緑）をクリック
-
-### PyTorch CUDAバージョンの選択
-
-| 選択肢 | CUDA | 必要ドライバー | 備考 |
-|--------|------|----------------|------|
-| `cu126` | 12.6 | **525.60以上** | 推奨・デフォルト |
-| `cu128` | 12.8 | 555.42以上 | - |
-| `cu130` | 13.0 | 570以上 | 最新 |
-
-**ドライバーバージョンの確認方法:**
-```powershell
-nvidia-smi
-```
-出力の「CUDA Version」が選択するバージョン以上であればOKです。
-
-> 💡 **どれを選ぶべき？**
-> - 迷ったら `cu126`（デフォルト）で問題ありません
-> - 最新ドライバー（570+）をお使いなら `cu130` も選択可能
-
-### 自動実行
-
-以下の場合は自動的にワークフローが実行されます：
-
-- **push**: 任意のブランチにプッシュ → ビルド＆テスト
-- **main/masterへのpush**: ビルド＆テスト → デプロイ
-- **Pull Request**: ビルド＆テストのみ（デプロイなし）
-
----
-
-## サービス管理コマンド
-
-```powershell
-cd C:\actions-runner
-```
-
-| コマンド | 説明 |
-|----------|------|
-| `.\svc.cmd install` | サービスをインストール |
-| `.\svc.cmd start` | サービスを開始 |
-| `.\svc.cmd stop` | サービスを停止 |
-| `.\svc.cmd status` | サービス状態を確認 |
-| `.\svc.cmd uninstall` | サービスをアンインストール |
-
-### サービスの状態確認（PowerShell）
-
-```powershell
-Get-Service -Name "actions.runner.*"
-```
-
----
-
-## トラブルシューティング
-
-### 実行ポリシーエラー
-
-```powershell
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-### ログの確認
-
-```powershell
-# Runnerのログを確認
-Get-Content C:\actions-runner\_diag\Runner_*.log -Tail 100
-
-# Workerのログを確認
-Get-Content C:\actions-runner\_diag\Worker_*.log -Tail 100
-```
-
-### Runnerがオフライン状態の場合
-
-1. サービスの状態を確認: `.\svc.cmd status`
-2. サービスを再起動: `.\svc.cmd stop` → `.\svc.cmd start`
-3. ネットワーク接続を確認
-4. トークンの有効期限を確認（再設定が必要な場合あり）
-
-### 認証エラー（トークン期限切れ）
-
-```powershell
-cd C:\actions-runner
-.\svc.cmd stop
-.\config.cmd remove --token <REMOVE_TOKEN>
-.\config.cmd --url https://github.com/<OWNER>/<REPO> --token <NEW_TOKEN>
-.\svc.cmd start
-```
-
----
-
-## アンインストール
-
-### Step 1: サービスを停止・削除
-
-```powershell
-cd C:\actions-runner
-.\svc.cmd stop
-.\svc.cmd uninstall
-```
-
-### Step 2: GitHubからRunnerを削除
-
-```powershell
-# 削除用トークンはGitHubの Settings > Actions > Runners から取得
-.\config.cmd remove --token <REMOVE_TOKEN>
-```
-
-### Step 3: フォルダを削除
-
-```powershell
-cd C:\
-Remove-Item -Recurse -Force C:\actions-runner
-```
-
----
-
-## 参考リンク
-
-- [GitHub Actions Runner 公式リポジトリ](https://github.com/actions/runner)
-- [Self-hosted runners ドキュメント](https://docs.github.com/en/actions/hosting-your-own-runners)
-- [Runner リリースページ](https://github.com/actions/runner/releases)
-
----
-
-*最終更新: 2026年1月28日*
+本ソフトウェアは Apache License 3.0 の下で公開されています。詳細は [LICENSE](LICENSE) を参照してください。
