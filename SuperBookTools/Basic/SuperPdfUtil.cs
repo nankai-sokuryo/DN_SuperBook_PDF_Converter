@@ -1808,6 +1808,21 @@ public class SuperPerformPdfOptions
     public int MaxPagesForDebug = int.MaxValue;
     public bool SaveDebugPng = false;
     public bool SkipRealesrgan = false;
+    
+    /// <summary>
+    /// 見開き画像を2分割する
+    /// </summary>
+    public bool SplitSpreadPages = false;
+    
+    /// <summary>
+    /// 右開きの場合 true、左開きの場合 false
+    /// </summary>
+    public bool RightToLeft = true;
+    
+    /// <summary>
+    /// 傾き補正の上限角度（度）。この値を超える傾きは補正しない。
+    /// </summary>
+    public double DeskewMaxDegree = 5.0;
 }
 
 public class SuperPdfResult
@@ -1902,8 +1917,71 @@ public static class SuperPdfUtil
         };
         await SuperBookExternalTools.ImageMagick.ExtractImagesFromPdfAsync(srcPdfPath, pdf_extracted_dir, extractOptions, cancel: cancel);
 
+        // 見開き画像を2分割する処理（トリミング前に実行）
+        string currentInputDir = pdf_extracted_dir;
+        if (options.SplitSpreadPages)
+        {
+            Con.WriteLine("Splitting spread pages...");
+            string pdf_split_dir = PP.Combine(tmpDirRoot, "1_1_pdf_split_dir");
+            await Lfs.CreateDirectoryAsync(pdf_split_dir, cancel: cancel);
+            
+            var filesToSplit = (await Lfs.EnumDirectoryAsync(currentInputDir, cancel: cancel))
+                .Where(x => x.IsFile && x.Name._IsExtensionMatch(".bmp"))
+                .OrderBy(x => x.Name, StrCmpi)
+                .ToList();
+            
+            int outputPageNumber = 0;
+            foreach (var file in filesToSplit)
+            {
+                using var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgb24>(file.FullPath, cancellationToken: cancel);
+                
+                // 横幅が縦幅より大きい場合は見開きとみなして分割
+                if (image.Width > image.Height)
+                {
+                    Con.WriteLine($"Splitting spread page: {file.Name}");
+                    int centerX = image.Width / 2;
+                    
+                    // 左半分と右半分を切り出し
+                    var leftRect = new Rectangle(0, 0, centerX, image.Height);
+                    var rightRect = new Rectangle(centerX, 0, image.Width - centerX, image.Height);
+                    
+                    using var leftImage = image.Clone(ctx => ctx.Crop(leftRect));
+                    using var rightImage = image.Clone(ctx => ctx.Crop(rightRect));
+                    
+                    // 右開きの場合: 右ページ → 左ページの順
+                    // 左開きの場合: 左ページ → 右ページの順
+                    if (options.RightToLeft)
+                    {
+                        // 右開き: 右ページが先
+                        await rightImage.SaveAsBmpAsync(PP.Combine(pdf_split_dir, $"page_{outputPageNumber:D5}.bmp"), cancellationToken: cancel);
+                        outputPageNumber++;
+                        await leftImage.SaveAsBmpAsync(PP.Combine(pdf_split_dir, $"page_{outputPageNumber:D5}.bmp"), cancellationToken: cancel);
+                        outputPageNumber++;
+                    }
+                    else
+                    {
+                        // 左開き: 左ページが先
+                        await leftImage.SaveAsBmpAsync(PP.Combine(pdf_split_dir, $"page_{outputPageNumber:D5}.bmp"), cancellationToken: cancel);
+                        outputPageNumber++;
+                        await rightImage.SaveAsBmpAsync(PP.Combine(pdf_split_dir, $"page_{outputPageNumber:D5}.bmp"), cancellationToken: cancel);
+                        outputPageNumber++;
+                    }
+                }
+                else
+                {
+                    // 縦長画像はそのままコピー
+                    await image.SaveAsBmpAsync(PP.Combine(pdf_split_dir, $"page_{outputPageNumber:D5}.bmp"), cancellationToken: cancel);
+                    outputPageNumber++;
+                }
+            }
+            
+            Con.WriteLine($"Split complete: {filesToSplit.Count} -> {outputPageNumber} pages");
+            currentInputDir = pdf_split_dir;
+        }
+
         // 抽出された画像の上下左右 0.5% をトリミングする (スキャンで黒枠などが映っている場合があるため)
-        var bmpFiles = (await Lfs.EnumDirectoryAsync(pdf_extracted_dir, cancel: cancel)).Where(x => x.IsFile && x.Name._IsExtensionMatch(".bmp")).OrderBy(x => x.Name, StrCmpi);
+        // 分割後に実行することで、各ページの余白が統一される
+        var bmpFiles = (await Lfs.EnumDirectoryAsync(currentInputDir, cancel: cancel)).Where(x => x.IsFile && x.Name._IsExtensionMatch(".bmp")).OrderBy(x => x.Name, StrCmpi);
 
         foreach (var bmpFile in bmpFiles)
         {
@@ -1945,7 +2023,7 @@ public static class SuperPdfUtil
         }
 
         // 色調整・傾き修正
-        var result = await PerformPagesYohakuAsync(pdf_ai_result_dir, pdf_adjusted_dir, pdf_tmp_dir, options.MarginPercent, Env.NumCpus, maxPagesForDebug: options.MaxPagesForDebug, saveDebugPng: options.SaveDebugPng);
+        var result = await PerformPagesYohakuAsync(pdf_ai_result_dir, pdf_adjusted_dir, pdf_tmp_dir, options.MarginPercent, Env.NumCpus, maxPagesForDebug: options.MaxPagesForDebug, saveDebugPng: options.SaveDebugPng, deskewMaxDegree: options.DeskewMaxDegree);
 
         // PDF を生成
         await Lfs.DeleteFileIfExistsAsync(dstPdfPath, raiseException: true, cancel: cancel);
@@ -2002,7 +2080,8 @@ public static class SuperPdfUtil
         bool noOcr = false,
         bool noDeskew = false,
         int maxPagesForDebug = int.MaxValue,
-        bool saveDebugPng = false
+        bool saveDebugPng = false,
+        double deskewMaxDegree = 5.0
         )
     {
         if (maxPagesForDebug <= 0) maxPagesForDebug = int.MaxValue;
@@ -2127,7 +2206,7 @@ public static class SuperPdfUtil
 
 
                 // 傾き補正(OpenCvSharp使用)
-                using var deskewedImage = noDeskew == false ? (await DeskewImageWithOpenCvAsync(newImage)) : newImage.Clone();
+                using var deskewedImage = noDeskew == false ? (await DeskewImageWithOpenCvAsync(newImage, deskewMaxDegree)) : newImage.Clone();
 
                 // deskew後ファイルを tmpDir に保存
                 string tempFilePath = PP.Combine(tmpDir, $"deskew_{page.PageNumber:D4}.png");
@@ -2483,7 +2562,9 @@ public static class SuperPdfUtil
     /// <summary>
     /// 画像の傾きをOpenCvSharpで検出し、補正したImageSharp Imageを返す。
     /// </summary>
-    private static async Task<SixLabors.ImageSharp.Image<Rgba32>> DeskewImageWithOpenCvAsync(SixLabors.ImageSharp.Image<Rgba32> src)
+    /// <param name="src">元画像</param>
+    /// <param name="maxDegree">補正する傾きの上限角度（度）</param>
+    private static async Task<SixLabors.ImageSharp.Image<Rgba32>> DeskewImageWithOpenCvAsync(SixLabors.ImageSharp.Image<Rgba32> src, double maxDegree = 5.0)
     {
         // 傾き角度を検出
         string otsuImgTmpPngPath = await Lfs.GenerateUniqueTempFilePathAsync("deskew", ".png");
@@ -2496,7 +2577,7 @@ public static class SuperPdfUtil
         try
         {
             // 2 値化されたイメージを用いて傾きを検出
-            double angle = await SuperBookExternalTools.ImageMagick.GetDeskewRotateDegreeAsync(otsuImgTmpPngPath, -1);
+            double angle = await SuperBookExternalTools.ImageMagick.GetDeskewRotateDegreeAsync(otsuImgTmpPngPath, sampleSize: -1, maxDegree: maxDegree);
 
             if (angle._IsNearlyZero())
             {

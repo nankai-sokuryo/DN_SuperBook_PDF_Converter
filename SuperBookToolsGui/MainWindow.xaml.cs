@@ -132,14 +132,25 @@ namespace SuperBookToolsGui
         int newStage = -1;
         
         // Detect stage from console messages
+        // Note: Order matters! More specific conditions must come before general ones.
         if (message.Contains("[PerformPdfAsync]: Starting"))
         {
             // New file started - reset to stage 1
             newStage = 1;
         }
-        else if (message.Contains("magick.exe") && message.Contains("-density"))
+        else if (message.Contains("[PerformPdfAsync]: Completed"))
         {
-            // Stage 1: ImageMagick extracting images from PDF
+            // File completed
+            newStage = TotalStages;
+        }
+        else if (message.Contains("Building ") && message.Contains(".pdf"))
+        {
+            // Stage 7: Building PDF (must check before magick.exe check since PDF building also uses magick)
+            newStage = 7;
+        }
+        else if (message.Contains("magick.exe") && message.Contains("-density") && !message.Contains("-compress"))
+        {
+            // Stage 1: ImageMagick extracting images from PDF (extraction doesn't use -compress, but PDF building does)
             newStage = 1;
         }
         else if (message.Contains("Real-ESRGAN:") || message.Contains("realesrgan"))
@@ -166,16 +177,6 @@ namespace SuperBookToolsGui
         {
             // Stage 6: Finalizing output
             newStage = 6;
-        }
-        else if (message.Contains("Building ") && message.Contains(".pdf"))
-        {
-            // Stage 7: Building PDF
-            newStage = 7;
-        }
-        else if (message.Contains("[PerformPdfAsync]: Completed"))
-        {
-            // File completed
-            newStage = TotalStages;
         }
         
         if (newStage > 0 && newStage != _currentStage)
@@ -314,6 +315,9 @@ namespace SuperBookToolsGui
             txtSourceDir.IsEnabled = !running;
             txtDestDir.IsEnabled = !running;
             chkOcr.IsEnabled = !running;
+            chkSplitSpread.IsEnabled = !running;
+            rbRightToLeft.IsEnabled = !running;
+            rbLeftToRight.IsEnabled = !running;
             
             if (!running)
             {
@@ -463,7 +467,37 @@ namespace SuperBookToolsGui
         
         UpdateProgress(0, numFiles * TotalStages, "Starting...");
 
-        var options = new SuperPerformPdfOptions();
+        // Get options from UI
+        bool splitSpread = false;
+        bool rightToLeft = true;
+        double deskewMaxDegree = 5.0;
+        Dispatcher.Invoke(() =>
+        {
+            splitSpread = chkSplitSpread.IsChecked == true;
+            rightToLeft = rbRightToLeft.IsChecked == true;
+            // Get deskew max degree from combobox (0=1°, 1=5°, 2=10°)
+            deskewMaxDegree = cbDeskewMax.SelectedIndex switch
+            {
+                0 => 1.0,
+                1 => 5.0,
+                2 => 10.0,
+                _ => 5.0
+            };
+        });
+
+        var options = new SuperPerformPdfOptions
+        {
+            SplitSpreadPages = splitSpread,
+            RightToLeft = rightToLeft,
+            DeskewMaxDegree = deskewMaxDegree
+        };
+        
+        if (splitSpread)
+        {
+            Log($"Spread split: Enabled ({(rightToLeft ? "右開き" : "左開き")})");
+        }
+        Log($"Deskew max angle: {deskewMaxDegree}°");
+        
         var errorFiles = new List<string>();
 
         for (int i = 0; i < srcFiles.Count; i++)

@@ -48,9 +48,24 @@
 
         <!-- Options -->
         <GroupBox Grid.Row="3" Header="Options" Margin="5,10">
-            <StackPanel Orientation="Horizontal" Margin="10">
-                <CheckBox x:Name="chkOcr" Content="Enable Japanese OCR (YomiToku AI)" VerticalAlignment="Center"/>
-                <TextBlock Text="  (Requires Python environment)" Foreground="Gray" VerticalAlignment="Center"/>
+            <StackPanel Margin="10">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                    <CheckBox x:Name="chkSplitSpread" Content="見開き画像を分割" VerticalAlignment="Center"/>
+                    <TextBlock Text="  " VerticalAlignment="Center"/>
+                    <RadioButton x:Name="rbRightToLeft" Content="右開き" IsChecked="True" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    <RadioButton x:Name="rbLeftToRight" Content="左開き" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                    <TextBlock Text="傾き補正上限:" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="cbDeskewMax" SelectedIndex="1" VerticalAlignment="Center" Margin="10,0,0,0" Width="80">
+                        <ComboBoxItem Content="1°"/>
+                        <ComboBoxItem Content="5°"/>
+                        <ComboBoxItem Content="10°"/>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox x:Name="chkOcr" Content="Enable Japanese OCR (YomiToku AI)" VerticalAlignment="Center"/>
+                </StackPanel>
             </StackPanel>
         </GroupBox>
 
